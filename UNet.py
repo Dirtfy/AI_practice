@@ -123,67 +123,110 @@ class Unet(nn.Module):
 
         return x
    
+
 class ConditionalUnet(nn.Module):
 
-    def __init__(self):
+    def __init__(self,
+                 channel: int,
+                 max_channel: int):
         super().__init__()
+
+        encode_schedule_list, decode_schedule_list = self.channel_scheduling(channel, max_channel)
+
+        print(f"encode schedule list:\n{encode_schedule_list}")
+        print(f"decode schedule list:\n{decode_schedule_list}")
+
+        self.encoder = UnetEncoder(channel_schedule_list=encode_schedule_list[:-1])
+        # 5층 파란색 화살표
+        self.last_encoder = CBR_Block(channel_schedule=encode_schedule_list[-1])
+
+        # Expansive path
+        # 5층 파란색 2번쨰 화살표인데 디코더로
+        self.first_decoder = CBR_Block(channel_schedule=decode_schedule_list[0])
+        self.decoder = UnetDecoder(channel_schedule_list=decode_schedule_list[1:])
+
+        # segmentation에 필요한 n개의 클래스에 대한 output 정의
+        self.fc = nn.Conv2d(in_channels=decode_schedule_list[-1][-1], out_channels=1, 
+                            kernel_size=1, stride=1, padding=0, bias=True)
+
+
+    def channel_scheduling(self, start_channel, max_channel):
+        encode_schedule_list = []
+        now_schedule = [start_channel, 64, 64]
+
+        while now_schedule[-1] < max_channel:
+            encode_schedule_list.append(now_schedule)
+
+            last_channel = now_schedule[-1]
+            now_schedule = [last_channel, last_channel*2, last_channel*2]
+
+        encode_schedule_list.append([
+            now_schedule[0],
+            now_schedule[-1]
+            ])
+        
+        decode_schedule_list = [encode_schedule_list[-1][::-1]]
+        for schedule in encode_schedule_list[-2::-1]:
+            now_schedule = schedule[::]
+            now_schedule[-1] *= 2
+            decode_schedule_list.append(now_schedule[::-1])
+        decode_schedule_list[-1][-1] = 64
+        
+        return encode_schedule_list, decode_schedule_list
 
 
     def forward(self, x):
+        print(f"before encode: {x.shape}")
+        x, prev_list = self.encoder.residual_forward(x)
+        print(f"after encode: {x.shape}")
+        x = self.last_encoder(x)
+        print(f"after last encode: {x.shape}")
+        x = self.first_decoder(x)
+        print(f"after first decode: {x.shape}")
+        x = self.decoder.residual_forward(x, prev_list[::-1])
+        print(f"after decode: {x.shape}")
+        x = self.fc(x)
+        print(f"after fc: {x.shape}")
         return x
-    
+
+
 class UnetEncoder(nn.Module):
 
     def __init__(self, 
                  channel_schedule_list):
-        super.__init__()
+        super().__init__()
 
-        self.cbr_list = []
-        for idx in range(channel_schedule_list):
-            self.cbr_list.append(
-                ResidualCBR_Block(channel_schedule=channel_schedule_list[idx])
-            )
+        self.encode_block_list = [
+            UnetEncodeBlock(channel_schedule=channel_schedule)
+            for channel_schedule in channel_schedule_list
+        ]
 
-        self.cbr_block = nn.Sequential(*self.cbr_list)
+        self.block = nn.Sequential(*self.encode_block_list)
 
     
     def forward(self, x):
-        return self.cbr_block(x) 
+        return self.block(x) 
     
     def residual_forward(self, x):
-         # 좌측 1층 레이어 2개 연결 및 빨간색 화살표
-        enc_1 = self.enc_1(x)
-        max_pool_1 = self.max_pool_1(enc_1)
+        residual_list = []
 
-        # 좌측 2층 레이어 2개 연결 및 빨간색 화살표
-        enc_2 = self.enc_2(max_pool_1)
-        maxs_pool_2 = self.max_pool_2(enc_2)
+        for block in self.encode_block_list:
+            x, h = block.residual_forward(x)
+            residual_list.append(h)
 
-        # 좌측 3층 레이어 2개 연결 및 빨간색 화살표
-        enc_3 = self.enc_3(maxs_pool_2)
-        max_pool_3 = self.max_pool_3(enc_3)
+        return x, residual_list
 
-        # 좌측 4층 레이어 2개 연결 및 빨간색 화살표
-        enc_4 = self.enc_4(max_pool_3)
-        max_pool_4 = self.max_pool_4(enc_4)
 
-        # 좌측 5층 레이어
-        enc_5 = self.enc_5(max_pool_4)
-
-class ResidualCBR_Block(nn.Module):
+class UnetEncodeBlock(nn.Module):
 
     def __init__(self, 
                  channel_schedule, 
-                 pool_kernel_size=2,
-                 kernel_size=3, stride=1, padding=1, bias=True):
-        super.__init__()
+                 pool_kernel_size=2):
+        super().__init__()
 
         self.cbr_list = [
             CBR_Block(
-                channel_schedule=channel_schedule,
-                kernel_size=kernel_size, 
-                stride=stride, 
-                padding=padding, bias=bias
+                channel_schedule=channel_schedule
             ),
 
             nn.MaxPool2d(kernel_size=pool_kernel_size)
@@ -194,6 +237,84 @@ class ResidualCBR_Block(nn.Module):
     
     def forward(self, x):
         return self.cbr_block(x) 
+    
+
+    def residual_forward(self, x):
+        print("")
+        print(f"before cbr block: {x.shape}")
+        h = self.cbr_list[0](x)
+        print(f"after cbr block: {h.shape}")
+        x = self.cbr_list[1](h)
+        print(f"after pooling: {x.shape}")
+        print("")
+        return x, h
+
+
+class UnetDecoder(nn.Module):
+
+    def __init__(self,
+                 channel_schedule_list):
+        super().__init__()
+
+        self.decode_block_list = [
+            UnetDecodeBlock(channel_schedule=channel_schedule)
+            for channel_schedule in channel_schedule_list
+        ]
+
+        self.block = nn.Sequential(*self.decode_block_list)
+
+
+    def forward(self, x):
+        return self.block(x)
+    
+
+    def residual_forward(self, x, prev_list):
+        for block, prev in zip(self.decode_block_list, prev_list):
+            x = block.residual_forward(x, prev)
+        return x
+
+
+class UnetDecodeBlock(nn.Module):
+
+    def __init__(self, 
+                 channel_schedule, 
+                 up_conv_kernel_size=2,
+                 stride=2, padding=0, bias=True):
+        super().__init__()
+
+        assert channel_schedule[0]//2 == channel_schedule[1]
+
+        up_conv_channel = channel_schedule[0]//2
+
+        self.cbr_list = [
+            nn.ConvTranspose2d(
+                in_channels = up_conv_channel, 
+                out_channels = up_conv_channel, 
+                kernel_size = up_conv_kernel_size, 
+                stride = stride, padding = padding, bias = bias),
+
+            CBR_Block(
+                channel_schedule=channel_schedule
+            )
+        ]
+
+        self.block = nn.Sequential(*self.cbr_list)
+
+    
+    def forward(self, x):
+        return self.block(x)
+
+
+    def residual_forward(self, x, prev):
+        print(x.shape)
+        up_conv = self.cbr_list[0](x)
+
+        print(up_conv.shape)
+        print(prev.shape)
+
+        copy_and_crop = torch.cat((up_conv, prev),dim =1)
+
+        return self.cbr_list[1](copy_and_crop)
 
 
 class CBR_Block(nn.Module):
@@ -214,10 +335,10 @@ class CBR_Block(nn.Module):
                     )
             )
 
-        self.cbr_block = nn.Sequential(*cbr_list)
+        self.block = nn.Sequential(*cbr_list)
 
     def forward(self, x):
-        return self.cbr_block(x)
+        return self.block(x)
 
     
 class CBR2d(nn.Module):
@@ -225,7 +346,7 @@ class CBR2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, bias):
         super().__init__()
         
-        self.cbr = nn.Sequential(
+        self.block = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                       kernel_size=kernel_size, stride=stride, padding=padding,
                       bias=bias),
@@ -234,5 +355,5 @@ class CBR2d(nn.Module):
         )
 
     def forward(self, x):
-        return self.cbr(x)
+        return self.block(x)
     
