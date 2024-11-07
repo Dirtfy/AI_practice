@@ -2,10 +2,9 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
-from torchvision.transforms import ToTensor
 from torchvision import transforms
 
-import UNet
+from Unet import Unet
 
 # 학습에 사용할 CPU나 GPU, MPS 장치를 얻습니다.
 device = (
@@ -50,7 +49,7 @@ for X, y in test_dataloader:
     print(f"Shape of y: {y.shape} {y.dtype}")
     break
 
-model = UNet.ConditionalUnet(channel=1, max_channel=1024).to(device)
+model = Unet(channel=1, max_channel=1024).to(device)
 print(model)
 for X, y in test_dataloader:
     print(model(X.to(device)))
