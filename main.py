@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
 
-from Unet import Unet
+from model.architecture.Unet import Unet
 
 # 학습에 사용할 CPU나 GPU, MPS 장치를 얻습니다.
 device = (

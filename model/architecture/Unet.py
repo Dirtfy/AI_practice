@@ -14,11 +14,8 @@ class Unet(nn.Module):
         print(f"decode schedule list:\n{decode_schedule_list}")
 
         self.encoder = UnetEncoder(channel_schedule_list=encode_schedule_list[:-1])
-        # 5층 파란색 화살표
         self.last_encoder = CBR_Block(channel_schedule=encode_schedule_list[-1])
 
-        # Expansive path
-        # 5층 파란색 2번쨰 화살표인데 디코더로
         self.first_decoder = CBR_Block(channel_schedule=decode_schedule_list[0])
         self.decoder = UnetDecoder(channel_schedule_list=decode_schedule_list[1:])
 
