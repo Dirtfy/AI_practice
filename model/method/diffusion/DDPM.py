@@ -1,42 +1,28 @@
 import torch
-import torch.nn as nn
+
 import torch.nn.functional as F
 
-import sys
-import os
-base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../base'))
-print(f"Adding base path to sys.path: {base_path}")
-sys.path.append(base_path)
-
-from base.GaussianDiffusion import GaussianDiffusion
-
-class TimeEmbedding(nn.Module):
-    def __init__(self, embedding_dim, diffusion_steps):
-        super(TimeEmbedding, self).__init__()
-        # nn.Embedding을 사용하여 시간 단계 t를 임베딩 벡터로 변환
-        self.embedding = nn.Embedding(diffusion_steps, embedding_dim)
-
-    def forward(self, t):
-        # t는 배치 크기만큼의 diffusion step
-        return self.embedding(t)  # t를 임베딩 벡터로 변환
+from .base.Diffusion import Diffusion
 
 
-class DDPM(GaussianDiffusion):
+class DDPM(Diffusion):
     def __init__(self, 
+                 device,
                  image_shape, 
                  diffusion_steps, 
                  beta_schedule,
                  time_embedder=None):
+        super().__init__(
+            device=device,
+            image_shape=image_shape,
+            diffusion_steps=diffusion_steps,
+            beta_schedule=beta_schedule,
+            time_embedder=time_embedder
+        )
 
-        self.image_shape = image_shape
-        self.diffusion_steps = diffusion_steps
-        
-        self.beta_schedule = beta_schedule
         self.alphas = 1.0 - self.beta_schedule
         self.alpha_bars = torch.cumprod(self.alphas, 0)
         
-        # Time Embedding
-        self.time_embedding = TimeEmbedding(128, diffusion_steps) if time_embedder == None else time_embedder
 
     def forward_diffusion(self, x0, t):
         # 노이즈 생성
@@ -80,7 +66,7 @@ class DDPM(GaussianDiffusion):
 
     def generate(self, architecture, num_images):
         initial_noise = torch.randn(
-            num_images, 3, 
-            self.image_shape[0], self.image_shape[1]
+            num_images,
+            self.image_shape[0], self.image_shape[1], self.image_shape[2]
             ).to(next(architecture.parameters()).device)
-        return self.reverse_diffusion(initial_noise)
+        return self.reverse_diffusion(architecture, initial_noise)
