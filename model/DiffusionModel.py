@@ -3,7 +3,7 @@ from torch.optim.optimizer import Optimizer
 
 from .Model import Model
 from .method.diffusion.base.Diffusion import Diffusion
-from .DataSetLoader import DataSetLoader
+from ..dataloader.SplitedDataSetLoader import SplitedDataSetLoader
 
 class DiffusionModel(Model):
 
@@ -11,7 +11,7 @@ class DiffusionModel(Model):
                  architecture: nn.Module,
                  method: Diffusion,
                  optimizer: Optimizer,
-                 dataset_loader: DataSetLoader):
+                 dataset_loader: SplitedDataSetLoader):
         super().__init__(
             architecture=architecture,
             dataset_loader=dataset_loader
@@ -72,3 +72,6 @@ class DiffusionModel(Model):
             total_loss += loss.item()
 
         return total_loss
+    
+    def generate(self):
+        return self.method.generate(self.architecture, 1)

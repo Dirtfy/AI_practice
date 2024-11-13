@@ -46,6 +46,17 @@ class DDPM(Diffusion):
             predicted_noise = architecture(current_image_and_emb)  # 결합된 입력을 architecture에 전달
             alpha_bar_t = self.alpha_bars[step].reshape(-1, 1, 1, 1)
             current_image = (current_image - torch.sqrt(1 - alpha_bar_t) * predicted_noise) / torch.sqrt(alpha_bar_t)
+
+            if current_image.shape[0] == 1:
+                import os.path as path
+                from torchvision.transforms import ToPILImage
+
+                t_path = path.join("result", "temp", f"t_{step}.png")
+                tf_pil = ToPILImage()
+                print(f"current shape: {current_image.shape}")
+                image = tf_pil(current_image.squeeze(dim=0))
+                image.save(t_path)
+
         return current_image
 
     def training_step(self, architecture, x0):

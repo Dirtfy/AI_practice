@@ -3,19 +3,22 @@ import torch.nn as nn
 
 from abc import *
 
-from .DataSetLoader import DataSetLoader
+from ..dataloader.SplitedDataSetLoader import SplitedDataSetLoader
 
 class Model(metaclass=ABCMeta):
 
     def __init__(self,
                  architecture: nn.Module,
-                 dataset_loader: DataSetLoader):
+                 dataset_loader: SplitedDataSetLoader):
         
         self.architecture = architecture
         self.dataset_loader = dataset_loader
 
     def train(self, device, epochs):
         self.architecture.train()  # 모델을 학습 모드로 설정
+
+        epoch_loss_list = []
+        epoch_validation_loss_list = []
 
         for epoch in range(epochs):
             epoch_loss = self.train_loop(
@@ -24,13 +27,18 @@ class Model(metaclass=ABCMeta):
                 device=device
                 )
             
+            epoch_loss_list.append(epoch_loss)
+            
             print(f"Epoch [{epoch+1}/{epochs}] Training loss: {epoch_loss/len(self.dataset_loader.train):.4f}")
 
             # Validation step
             val_loss = self.validate(device)
+            epoch_validation_loss_list.append(val_loss)
             print(f"Validation Loss after Epoch [{epoch+1}/{epochs}]: {val_loss:.4f}")
 
         print("Finished Training")
+
+        return epoch_loss_list, epoch_validation_loss_list
 
     @abstractmethod
     def train_loop(self, total_epoch, now_epoch, device):
@@ -63,9 +71,18 @@ class Model(metaclass=ABCMeta):
     def test_loop(self, device):
         pass
 
+
     def save(self, file_name):
         torch.save(self.architecture.state_dict(), file_name)
     
 
     def load(self, file_name):
         self.architecture.load_state_dict(torch.load(file_name))
+
+
+    def run(self, device, epochs, file_name):
+        self.train(device, epochs)
+
+        self.test(device)
+
+        self.save(file_name)

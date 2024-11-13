@@ -7,13 +7,10 @@ from torchvision import transforms
 
 import os.path as path
 
-import matplotlib.pyplot as plt
-
 from model.architecture.Unet import Unet
 from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
-from dataloader.SplitedDataSet import SplitedDataSet
-from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from model.DataSetLoader import DataSetLoader
 
 
 # 학습에 사용할 CPU나 GPU, MPS 장치를 얻습니다.
@@ -60,13 +57,11 @@ test_data = datasets.FashionMNIST(
 batch_size = 64
 
 # 데이터로더를 생성합니다.
-dataset_loader = SplitedDataSetLoader(
+dataset_loader = DataSetLoader(
     batch_size=batch_size,
-    splited_dataset=SplitedDataSet(
-        train_data=training_data,
-        validatioin_data=validation_data,
-        test_data=test_data
-    )
+    train_data=training_data,
+    validatioin_data=validation_data,
+    test_data=test_data
 )
 
 unet = Unet(channel=image_shape[0]*2, max_channel=1024).to(device)
@@ -92,34 +87,6 @@ test_path = path.join(result_path, "test")
 architecture_saved_path = path.join(train_path, "trained")
 sample_saved_path = path.join(test_path, "test.png")
 
-try:
-    model.load(architecture_saved_path)
-except:
-    loss_list, validation_loss = model.train(device=device, epochs=100)
-    model.save(architecture_saved_path)
 
-model.test(device=device)
-
-sample = ddpm.generate(unet, 1)
-tf_pil = ToPILImage()
-image = tf_pil(sample.squeeze(dim=0))
-image.save(sample_saved_path)
-
-
-x = list(range(1, 100+1))
-
-y = loss_list
-plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='train')
-
-y = validation_loss
-plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='validation')
-
-# 그래프에 제목과 라벨 추가
-plt.title("loss")
-plt.xlabel("epoch")
-plt.ylabel("loss")
-plt.legend()
-
-# 그래프 이미지 파일로 저장
-plt.savefig("loss_line_plot.png", format="png", dpi=300)  # png 형식으로 저장, 해상도 설정
+model.load(architecture_saved_path)
 
