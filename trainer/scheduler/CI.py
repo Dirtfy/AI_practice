@@ -2,8 +2,8 @@ from typing import List
 
 from torch.utils.data import ConcatDataset
 
-from ..dataloader.SplitedDataSet import SplitedDataSet
-from ..dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from dataloader.SplitedDataSet import SplitedDataSet
+from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
 
 class CI():
     def __init__(self,
@@ -16,6 +16,13 @@ class CI():
 
         self.now_task = 0
         self.last_task = len(class_schedule_list)-1
+
+    def split_by_class(dataset, target_class):
+        """
+        주어진 클래스(target_class)에 해당하는 데이터만 포함된 하위 데이터셋 반환
+        """
+        indices = [i for i, (_, label) in enumerate(dataset) if label == target_class]
+        return Subset(dataset, indices)
 
     
     def __iter__(self):

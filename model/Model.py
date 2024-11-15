@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from abc import *
 
-from ..dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
 
 class Model(metaclass=ABCMeta):
 
@@ -80,9 +80,11 @@ class Model(metaclass=ABCMeta):
         self.architecture.load_state_dict(torch.load(file_name))
 
 
-    def run(self, device, epochs, file_name):
-        self.train(device, epochs)
+    def run(self, device, epochs, save_file_path):
+        epoch_loss_list, validation_loss_list = self.train(device, epochs)
 
         self.test(device)
 
-        self.save(file_name)
+        self.save(save_file_path)
+
+        return epoch_loss_list, validation_loss_list

@@ -1,5 +1,7 @@
-from SplitedDataSet import SplitedDataSet
 from torch.utils.data import DataLoader
+
+from .SplitedDataSet import SplitedDataSet
+
 
 class SplitedDataSetLoader():
     def __init__(self,

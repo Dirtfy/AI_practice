@@ -3,7 +3,8 @@ from torch.optim.optimizer import Optimizer
 
 from .Model import Model
 from .method.diffusion.base.Diffusion import Diffusion
-from ..dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+
+from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
 
 class DiffusionModel(Model):
 

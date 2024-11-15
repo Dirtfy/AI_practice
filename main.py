@@ -14,7 +14,13 @@ from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
 from dataloader.SplitedDataSet import SplitedDataSet
 from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from trainer.CI_scenario import CI_scenario
+from trainer.scheduler.CI import CI
 
+from logger.FileLogger import FileLogger
+
+logger = FileLogger("log.txt")
+logger.on()
 
 # 학습에 사용할 CPU나 GPU, MPS 장치를 얻습니다.
 device = (
@@ -88,25 +94,20 @@ model = DiffusionModel(
 
 result_path = path.join(".", "result")
 train_path = path.join(result_path, "train")
-test_path = path.join(result_path, "test")
-architecture_saved_path = path.join(train_path, "trained")
-sample_saved_path = path.join(test_path, "test.png")
 
-try:
-    model.load(architecture_saved_path)
-except:
-    loss_list, validation_loss = model.train(device=device, epochs=100)
-    model.save(architecture_saved_path)
+epoch = 50
 
-model.test(device=device)
+model_name = f"trained_epoch={epoch}"
+model_save_path = path.join(train_path, model_name)
+loss_list, validation_loss = model.run(device=device, epochs=epoch, save_file_path=model_save_path)
 
-sample = ddpm.generate(unet, 1)
-tf_pil = ToPILImage()
-image = tf_pil(sample.squeeze(dim=0))
-image.save(sample_saved_path)
+# scenario = CI_scenario(model=model, 
+#             scheduler=CI(
+#                 batch_size=batch_size, 
+#                 class_schedule_list=[],
+#                 class_dataset_list=[]))
 
-
-x = list(range(1, 100+1))
+x = list(range(1, epoch+1))
 
 y = loss_list
 plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='train')
@@ -120,6 +121,18 @@ plt.xlabel("epoch")
 plt.ylabel("loss")
 plt.legend()
 
+graph_path = path.join(train_path, "loss_line_plot.png")
 # 그래프 이미지 파일로 저장
-plt.savefig("loss_line_plot.png", format="png", dpi=300)  # png 형식으로 저장, 해상도 설정
+plt.savefig(graph_path, format="png", dpi=300)  # png 형식으로 저장, 해상도 설정
 
+
+test_path = path.join(result_path, "test")
+
+sample_saved_path = path.join(test_path, "test.png")
+
+sample = ddpm.generate(unet, 1)
+tf_pil = ToPILImage()
+image = tf_pil(sample.squeeze(dim=0))
+image.save(sample_saved_path)
+
+logger.off()
