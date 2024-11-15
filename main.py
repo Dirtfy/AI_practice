@@ -95,7 +95,7 @@ model = DiffusionModel(
 result_path = path.join(".", "result")
 train_path = path.join(result_path, "train")
 
-epoch = 50
+epoch = 1
 
 model_name = f"trained_epoch={epoch}"
 model_save_path = path.join(train_path, model_name)
