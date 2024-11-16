@@ -1,11 +1,50 @@
 import torch
 import torch.nn as nn
 
+import torch
+import math
+
+class SinusoidalPositionEmbedding(nn.Module):
+    def __init__(self, 
+                 device,
+                 dim, 
+                 max_position):
+        super(SinusoidalPositionEmbedding, self).__init__()
+        self.dim = dim
+        self.max_position = max_position
+
+        # Position Embedding을 계산하는 함수
+        self.position_embeddings = self._get_position_embeddings().to(device)
+
+    def _get_position_embeddings(self):
+        """
+        sinusoidal 임베딩을 사인과 코사인을 결합하여 생성
+        """
+        # 각 position에 대해 임베딩을 계산
+        position = torch.arange(self.max_position, dtype=torch.float).unsqueeze(1)  # shape: [max_position, 1]
+        div_term = torch.exp(torch.arange(0, self.dim, 2).float() * -(math.log(10000.0) / self.dim))  # shape: [dim/2]
+
+        # 사인과 코사인 값 계산
+        embeddings = torch.zeros(self.max_position, self.dim)  # [max_position, dim]
+        embeddings[:, 0::2] = torch.sin(position * div_term)  # 짝수 인덱스: 사인
+        embeddings[:, 1::2] = torch.cos(position * div_term)  # 홀수 인덱스: 코사인
+
+        return embeddings
+
+    def forward(self, position_ids):
+        """
+        주어진 위치에 대해 임베딩을 반환
+        position_ids: (batch_size, seq_len) 위치 인덱스 텐서
+        """
+        return self.position_embeddings[position_ids]
+
 class Unet(nn.Module):
 
     def __init__(self,
                  channel: int,
-                 max_channel: int):
+                 max_channel: int,
+                 time_embedding,
+                 condition_embedding=None):
         super().__init__()
 
         encode_schedule_list, decode_schedule_list = self.channel_scheduling(channel, max_channel)
@@ -14,14 +53,16 @@ class Unet(nn.Module):
         print(f"decode schedule list:\n{decode_schedule_list}")
 
         self.encoder = UnetEncoder(channel_schedule_list=encode_schedule_list[:-1])
-        self.last_encoder = CBR_Block(channel_schedule=encode_schedule_list[-1])
+        self.encode_adapter = CBR_Block(channel_schedule=encode_schedule_list[-1])
 
-        self.first_decoder = CBR_Block(channel_schedule=decode_schedule_list[0])
+        self.decode_adapter = CBR_Block(channel_schedule=decode_schedule_list[0])
         self.decoder = UnetDecoder(channel_schedule_list=decode_schedule_list[1:])
 
-        # segmentation에 필요한 n개의 클래스에 대한 output 정의
-        self.fc = nn.Conv2d(in_channels=decode_schedule_list[-1][-1], out_channels=1, 
-                            kernel_size=1, stride=1, padding=0, bias=True)
+        self.out = nn.Conv2d(in_channels=decode_schedule_list[-1][-1], out_channels=channel, 
+                            kernel_size=3, stride=1, padding=1)
+        
+        self.time_embedding = time_embedding
+        self.condition_embedding = condition_embedding
 
 
     def channel_scheduling(self, start_channel, max_channel):
@@ -49,12 +90,19 @@ class Unet(nn.Module):
         return encode_schedule_list, decode_schedule_list
 
 
-    def forward(self, x):
-        x, prev_list = self.encoder.residual_forward(x)
-        x = self.last_encoder(x)
-        x = self.first_decoder(x)
-        x = self.decoder.residual_forward(x, prev_list[::-1])
-        x = self.fc(x)
+    def forward(self, x, t, c=None):
+        t_emb = self.time_embedding(t)
+        c_emb = self.condition_embedding(c) \
+            if self.condition_embedding is not None else None
+
+        x, prev_list = self.encoder.residual_forward(x, t_emb, c_emb)
+        x = self.encode_adapter(x, t_emb, c_emb)
+
+        x = self.decode_adapter(x, t_emb, c_emb)
+        x = self.decoder.residual_forward(x, prev_list[::-1], t_emb, c_emb)
+
+        x = self.out(x)
+
         return x
 
 
@@ -75,11 +123,11 @@ class UnetEncoder(nn.Module):
     def forward(self, x):
         return self.block(x) 
     
-    def residual_forward(self, x):
+    def residual_forward(self, x, t_emb, c_emb):
         residual_list = []
 
         for block in self.encode_block_list:
-            x, h = block.residual_forward(x)
+            x, h = block.residual_forward(x, t_emb, c_emb)
             residual_list.append(h)
 
         return x, residual_list
@@ -107,8 +155,8 @@ class UnetEncodeBlock(nn.Module):
         return self.cbr_block(x) 
     
 
-    def residual_forward(self, x):
-        h = self.cbr_list[0](x)
+    def residual_forward(self, x, t_emb, c_emb):
+        h = self.cbr_list[0](x, t_emb, c_emb)
         x = self.cbr_list[1](h)
         return x, h
 
@@ -131,9 +179,9 @@ class UnetDecoder(nn.Module):
         return self.block(x)
     
 
-    def residual_forward(self, x, prev_list):
+    def residual_forward(self, x, prev_list, t_emb, c_emb):
         for block, prev in zip(self.decode_block_list, prev_list):
-            x = block.residual_forward(x, prev)
+            x = block.residual_forward(x, prev, t_emb, c_emb)
         return x
 
 
@@ -168,10 +216,10 @@ class UnetDecodeBlock(nn.Module):
         return self.block(x)
 
 
-    def residual_forward(self, x, prev):
+    def residual_forward(self, x, prev, t_emb, c_emb):
         up_conv = self.cbr_list[0](x)
         copy_and_crop = torch.cat((up_conv, prev),dim =1)
-        return self.cbr_list[1](copy_and_crop)
+        return self.cbr_list[1](copy_and_crop, t_emb, c_emb)
 
 
 class CBR_Block(nn.Module):
@@ -194,8 +242,26 @@ class CBR_Block(nn.Module):
 
         self.block = nn.Sequential(*cbr_list)
 
-    def forward(self, x):
-        return self.block(x)
+        self.cross_attention = nn.MultiheadAttention(
+            embed_dim=channel_schedule[-1], 
+            num_heads=1, 
+            batch_first=True)
+
+    def forward(self, x: torch.Tensor, t_emb: torch.Tensor, c_emb):
+        t_emb = t_emb\
+            .reshape(-1, 1, 1, 1)\
+                .expand(-1, -1, x.shape[2], x.shape[3])
+        
+        x = x+t_emb
+
+        x = self.block(x)
+
+        if c_emb is not None:
+            x = x.flatten(2)
+            x, _ = self.cross_attention(x, c_emb, c_emb)
+            x = x.reshape(t_emb.shape)
+
+        return x
 
     
 class CBR2d(nn.Module):

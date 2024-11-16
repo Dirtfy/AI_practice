@@ -10,21 +10,27 @@ import os.path as path
 import matplotlib.pyplot as plt
 
 from model.architecture.Unet import Unet
+from model.architecture.Unet import SinusoidalPositionEmbedding
+from model.architecture.Unet2 import UNet as Unet2
 from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
+
 from dataloader.SplitedDataSet import SplitedDataSet
 from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+
 from trainer.CI_scenario import CI_scenario
 from trainer.scheduler.CI import CI
 
 from logger.FileLogger import FileLogger
+
+from utils.convert import tensorToPIL
 
 logger = FileLogger("log.txt")
 logger.on()
 
 # 학습에 사용할 CPU나 GPU, MPS 장치를 얻습니다.
 device = (
-    "cuda"
+    "cuda:0"
     if torch.cuda.is_available()
     else "mps"
     if torch.backends.mps.is_available()
@@ -36,11 +42,12 @@ image_shape = (1, 64, 64)
 
 image_transform = transforms.Compose([
         transforms.Resize(image_shape[1:]),  # 이미지 크기를 64x64로 조정
-        transforms.ToTensor()         # 이미지를 Tensor 형식으로 변환
+        transforms.ToTensor(),         # 이미지를 Tensor 형식으로 변환
+        transforms.Normalize(0.5, 0.5)
     ])
 
 # 공개 데이터셋에서 학습 데이터를 내려받습니다.
-training_data = datasets.FashionMNIST(
+training_data = datasets.MNIST(
     root="data",
     train=True,
     download=True,
@@ -48,7 +55,7 @@ training_data = datasets.FashionMNIST(
 )
 
 # 공개 데이터셋에서 테스트 데이터를 내려받습니다.
-validation_data = datasets.FashionMNIST(
+validation_data = datasets.MNIST(
     root="data",
     train=False,
     download=True,
@@ -56,14 +63,14 @@ validation_data = datasets.FashionMNIST(
 )
 
 # 공개 데이터셋에서 테스트 데이터를 내려받습니다.
-test_data = datasets.FashionMNIST(
+test_data = datasets.MNIST(
     root="data",
     train=False,
     download=True,
     transform= image_transform
 )
 
-batch_size = 64
+batch_size = 16
 
 # 데이터로더를 생성합니다.
 dataset_loader = SplitedDataSetLoader(
@@ -75,9 +82,17 @@ dataset_loader = SplitedDataSetLoader(
     )
 )
 
-unet = Unet(channel=image_shape[0]*2, max_channel=1024).to(device)
-
 diffusion_step = 1000
+
+unet = Unet(
+    channel=image_shape[0], 
+    max_channel=1024,
+    time_embedding=SinusoidalPositionEmbedding(
+        device=device, dim=image_shape[0], max_position=diffusion_step
+        )
+    ).to(device)
+# unet = Unet2(n_channels=1*2, n_classes=1).to(device)
+
 ddpm = DDPM(
     device=device,
     image_shape=image_shape,
@@ -130,9 +145,10 @@ test_path = path.join(result_path, "test")
 
 sample_saved_path = path.join(test_path, "test.png")
 
-sample = ddpm.generate(unet, 1)
-tf_pil = ToPILImage()
-image = tf_pil(sample.squeeze(dim=0))
+model.load(path.join(path.dirname(model_save_path), "best"))
+
+sample = model.generate()
+image = tensorToPIL(sample[0])
 image.save(sample_saved_path)
 
 logger.off()

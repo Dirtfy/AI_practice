@@ -1,3 +1,5 @@
+import os.path as path
+
 import torch
 import torch.nn as nn
 
@@ -14,7 +16,7 @@ class Model(metaclass=ABCMeta):
         self.architecture = architecture
         self.dataset_loader = dataset_loader
 
-    def train(self, device, epochs):
+    def train(self, device, epochs, best_path):
         self.architecture.train()  # 모델을 학습 모드로 설정
 
         epoch_loss_list = []
@@ -27,13 +29,19 @@ class Model(metaclass=ABCMeta):
                 device=device
                 )
             
-            epoch_loss_list.append(epoch_loss)
+            avg_loss = epoch_loss / len(self.dataset_loader.train)
+            epoch_loss_list.append(avg_loss)
             
             print(f"Epoch [{epoch+1}/{epochs}] Training loss: {epoch_loss/len(self.dataset_loader.train):.4f}")
 
             # Validation step
             val_loss = self.validate(device)
             epoch_validation_loss_list.append(val_loss)
+
+            if min(epoch_validation_loss_list) == val_loss:
+                self.save(best_path)
+
+
             print(f"Validation Loss after Epoch [{epoch+1}/{epochs}]: {val_loss:.4f}")
 
         print("Finished Training")
@@ -81,7 +89,8 @@ class Model(metaclass=ABCMeta):
 
 
     def run(self, device, epochs, save_file_path):
-        epoch_loss_list, validation_loss_list = self.train(device, epochs)
+        best_path = path.join(path.dirname(save_file_path), "best")
+        epoch_loss_list, validation_loss_list = self.train(device, epochs, best_path)
 
         self.test(device)
 
