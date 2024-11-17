@@ -4,30 +4,26 @@ from torch.optim.optimizer import Optimizer
 from .Model import Model
 from .method.diffusion.base.Diffusion import Diffusion
 
-from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
-
 class DiffusionModel(Model):
 
     def __init__(self,
                  architecture: nn.Module,
                  method: Diffusion,
-                 optimizer: Optimizer,
-                 dataset_loader: SplitedDataSetLoader):
+                 optimizer: Optimizer):
         super().__init__(
-            architecture=architecture,
-            dataset_loader=dataset_loader
+            architecture=architecture
             )
         
         self.method = method
 
         self.optimizer = optimizer
 
-    def train_loop(self, total_epoch, now_epoch, device):
+    def train_loop(self, train_dataloader, total_epoch, now_epoch):
         epoch_loss = 0.0
         batch_loss = 0.0
 
-        for i, (images, _) in enumerate(self.dataset_loader.train):
-            images = images.to(device)  # GPU로 이동
+        for i, (images, _) in enumerate(train_dataloader):
+            images = images.to(self.device)  # GPU로 이동
 
             self.optimizer.zero_grad()
             
@@ -42,7 +38,9 @@ class DiffusionModel(Model):
             epoch_loss += loss.item()
 
             if (i + 1) % 100 == 0:  # 100 배치마다 손실 출력
-                print(f"Epoch [{now_epoch+1}/{total_epoch}], Step [{i+1}/{len(self.dataset_loader.train)}], Loss: {batch_loss/100:.4f}")
+                print(f"Epoch [{now_epoch+1}/{total_epoch}], 
+                      Step [{i+1}/{len(self.dataset_loader.train)}], 
+                      Loss: {batch_loss/100:.4f}")
                 batch_loss = 0.0
 
         return epoch_loss
@@ -50,10 +48,10 @@ class DiffusionModel(Model):
 
 
     # Validation 루프
-    def validate_loop(self, device):
+    def validate_loop(self, dataloader):
         total_loss = 0.0
-        for images, _ in self.dataset_loader.validatioin:
-            images = images.to(device)
+        for images, _ in dataloader:
+            images = images.to(self.device)
             
             # 모델의 예측 단계
             loss = self.method.training_step(self.architecture, images)
@@ -62,11 +60,11 @@ class DiffusionModel(Model):
         return total_loss
 
     # Test 루프
-    def test_loop(self, device):
+    def test_loop(self, dataloader):
         
         total_loss = 0.0
-        for images, _ in self.dataset_loader.test:
-            images = images.to(device)
+        for images, _ in dataloader:
+            images = images.to(self.device)
             
             # 모델의 예측 단계
             loss = self.method.training_step(self.architecture, images)

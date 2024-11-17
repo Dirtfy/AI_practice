@@ -41,22 +41,35 @@ class SinusoidalPositionEmbedding(nn.Module):
 class Unet(nn.Module):
 
     def __init__(self,
-                 channel: int,
+                 image_shape,
                  max_channel: int,
                  time_embedding,
                  condition_embedding=None):
         super().__init__()
 
+        channel = image_shape[0]
+        image_size = image_shape[1:]
+
         encode_schedule_list, decode_schedule_list = self.channel_scheduling(channel, max_channel)
+
+        mid_image_size = [s//(2**(len(encode_schedule_list)-1)) for s in image_size]
 
         print(f"encode schedule list:\n{encode_schedule_list}")
         print(f"decode schedule list:\n{decode_schedule_list}")
 
-        self.encoder = UnetEncoder(channel_schedule_list=encode_schedule_list[:-1])
-        self.encode_adapter = CBR_Block(channel_schedule=encode_schedule_list[-1])
+        self.encoder = UnetEncoder(
+            channel_schedule_list=encode_schedule_list[:-1],
+            image_size=image_size)
+        self.encode_adapter = CBR_Block(
+            channel_schedule=encode_schedule_list[-1],
+            image_size=mid_image_size)
 
-        self.decode_adapter = CBR_Block(channel_schedule=decode_schedule_list[0])
-        self.decoder = UnetDecoder(channel_schedule_list=decode_schedule_list[1:])
+        self.decode_adapter = CBR_Block(
+            channel_schedule=decode_schedule_list[0],
+            image_size=mid_image_size)
+        self.decoder = UnetDecoder(
+            channel_schedule_list=decode_schedule_list[1:],
+            image_size=image_size)
 
         self.out = nn.Conv2d(in_channels=decode_schedule_list[-1][-1], out_channels=channel, 
                             kernel_size=3, stride=1, padding=1)
@@ -109,12 +122,15 @@ class Unet(nn.Module):
 class UnetEncoder(nn.Module):
 
     def __init__(self, 
-                 channel_schedule_list):
+                 channel_schedule_list,
+                 image_size):
         super().__init__()
 
         self.encode_block_list = [
-            UnetEncodeBlock(channel_schedule=channel_schedule)
-            for channel_schedule in channel_schedule_list
+            UnetEncodeBlock(
+                channel_schedule=channel_schedule, 
+                image_size=[s//(2**i) for s in image_size])
+            for i, channel_schedule in enumerate(channel_schedule_list)
         ]
 
         self.block = nn.Sequential(*self.encode_block_list)
@@ -137,12 +153,14 @@ class UnetEncodeBlock(nn.Module):
 
     def __init__(self, 
                  channel_schedule, 
+                 image_size,
                  pool_kernel_size=2):
         super().__init__()
 
         self.cbr_list = [
             CBR_Block(
-                channel_schedule=channel_schedule
+                channel_schedule=channel_schedule,
+                image_size=image_size
             ),
 
             nn.MaxPool2d(kernel_size=pool_kernel_size)
@@ -164,12 +182,15 @@ class UnetEncodeBlock(nn.Module):
 class UnetDecoder(nn.Module):
 
     def __init__(self,
-                 channel_schedule_list):
+                 channel_schedule_list,
+                 image_size):
         super().__init__()
 
         self.decode_block_list = [
-            UnetDecodeBlock(channel_schedule=channel_schedule)
-            for channel_schedule in channel_schedule_list
+            UnetDecodeBlock(
+                channel_schedule=channel_schedule,
+                image_size=[s//(2**(len(channel_schedule_list)-1-i)) for s in image_size])
+            for i, channel_schedule in enumerate(channel_schedule_list)
         ]
 
         self.block = nn.Sequential(*self.decode_block_list)
@@ -189,6 +210,7 @@ class UnetDecodeBlock(nn.Module):
 
     def __init__(self, 
                  channel_schedule, 
+                 image_size,
                  up_conv_kernel_size=2,
                  stride=2, padding=0, bias=True):
         super().__init__()
@@ -205,7 +227,8 @@ class UnetDecodeBlock(nn.Module):
                 stride = stride, padding = padding, bias = bias),
 
             CBR_Block(
-                channel_schedule=channel_schedule
+                channel_schedule=channel_schedule,
+                image_size=image_size
             )
         ]
 
@@ -224,8 +247,16 @@ class UnetDecodeBlock(nn.Module):
 
 class CBR_Block(nn.Module):
 
-    def __init__(self, channel_schedule, kernel_size=3, stride=1, padding=1, bias=True):
+    def __init__(self, 
+                 channel_schedule,
+                 image_size, 
+                 kernel_size=3, stride=1, padding=1, bias=True):
         super().__init__()
+
+        self.time_embedding = nn.Sequential(
+            nn.Linear(in_features=1, out_features=channel_schedule[0]),
+            nn.ReLU()
+            )
 
         cbr_list = []
         for idx in range(len(channel_schedule) - 1):
@@ -239,27 +270,30 @@ class CBR_Block(nn.Module):
                     bias = bias
                     )
             )
-
         self.block = nn.Sequential(*cbr_list)
-
+        
         self.cross_attention = nn.MultiheadAttention(
-            embed_dim=channel_schedule[-1], 
+            embed_dim=image_size[0]*image_size[1], 
             num_heads=1, 
             batch_first=True)
 
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor, c_emb):
+        t_emb = self.time_embedding(t_emb)
+        
         t_emb = t_emb\
-            .reshape(-1, 1, 1, 1)\
-                .expand(-1, -1, x.shape[2], x.shape[3])
+            .reshape(-1, t_emb.shape[1], 1, 1)\
+                .expand(-1, -1, *x.shape[2:])
         
         x = x+t_emb
 
         x = self.block(x)
 
-        if c_emb is not None:
-            x = x.flatten(2)
-            x, _ = self.cross_attention(x, c_emb, c_emb)
-            x = x.reshape(t_emb.shape)
+        x = x.flatten(2)
+
+        c_emb = c_emb if c_emb is not None else x
+        x, _ = self.cross_attention(x, c_emb, c_emb)
+        
+        x = x.reshape(t_emb.shape[0], -1, *t_emb.shape[2:])
 
         return x
 
@@ -270,6 +304,7 @@ class CBR2d(nn.Module):
         super().__init__()
         
         self.block = nn.Sequential(
+            # nn.GroupNorm(num_groups=in_channels//4, num_channels=in_channels),
             nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                       kernel_size=kernel_size, stride=stride, padding=padding,
                       bias=bias),

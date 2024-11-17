@@ -1,11 +1,11 @@
-from torch.utils.data import Dataset
+from torch.utils.data import Subset
 
 class SplitedDataSet():
     def __init__(self,
-                 train_data: Dataset,
-                 validatioin_data: Dataset,
-                 test_data: Dataset):
+                 train_data: Subset,
+                 validation_data: Subset,
+                 test_data: Subset):
         
         self.train = train_data
-        self.validatioin = validatioin_data
+        self.validatioin = validation_data
         self.test = test_data

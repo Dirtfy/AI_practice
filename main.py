@@ -1,6 +1,10 @@
 import torch
 import torch.optim as optim
 
+from torch.utils.data import Dataset
+from torch.utils.data import ConcatDataset
+from torch.utils.data import Subset
+
 from torchvision import datasets
 from torchvision.transforms import ToPILImage
 from torchvision import transforms
@@ -12,6 +16,10 @@ import matplotlib.pyplot as plt
 from model.architecture.Unet import Unet
 from model.architecture.Unet import SinusoidalPositionEmbedding
 from model.architecture.Unet2 import UNet as Unet2
+from model.architecture.unet.Unet import Unet as nUnet
+
+from model.embedding.SinusoidalPositionEmbedding import SinusoidalPositionEmbedding
+
 from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
 
@@ -38,7 +46,7 @@ device = (
 )
 print(f"Using {device} device")
 
-image_shape = (1, 64, 64)
+image_shape = (1, 32, 32)
 
 image_transform = transforms.Compose([
         transforms.Resize(image_shape[1:]),  # 이미지 크기를 64x64로 조정
@@ -55,14 +63,6 @@ training_data = datasets.MNIST(
 )
 
 # 공개 데이터셋에서 테스트 데이터를 내려받습니다.
-validation_data = datasets.MNIST(
-    root="data",
-    train=False,
-    download=True,
-    transform= image_transform
-)
-
-# 공개 데이터셋에서 테스트 데이터를 내려받습니다.
 test_data = datasets.MNIST(
     root="data",
     train=False,
@@ -72,26 +72,22 @@ test_data = datasets.MNIST(
 
 batch_size = 16
 
-# 데이터로더를 생성합니다.
-dataset_loader = SplitedDataSetLoader(
-    batch_size=batch_size,
-    splited_dataset=SplitedDataSet(
-        train_data=training_data,
-        validatioin_data=validation_data,
-        test_data=test_data
-    )
-)
-
 diffusion_step = 1000
 
-unet = Unet(
-    channel=image_shape[0], 
-    max_channel=1024,
-    time_embedding=SinusoidalPositionEmbedding(
-        device=device, dim=image_shape[0], max_position=diffusion_step
-        )
-    ).to(device)
+# unet = Unet(
+#     image_shape=image_shape,
+#     max_channel=1024,
+#     time_embedding=SinusoidalPositionEmbedding(
+#         device=device, dim=image_shape[0], max_position=diffusion_step
+#         )
+#     ).to(device)
 # unet = Unet2(n_channels=1*2, n_classes=1).to(device)
+t_emb_dim = image_shape[0]
+unet = nUnet(shape=image_shape, depth=5,
+             t_emb_dim=t_emb_dim,
+             time_embedding=SinusoidalPositionEmbedding(
+                 device=device,
+                 dim=t_emb_dim,max_position=diffusion_step)).to(device)
 
 ddpm = DDPM(
     device=device,
@@ -103,8 +99,7 @@ ddpm = DDPM(
 model = DiffusionModel(
     architecture=unet,
     method=ddpm,
-    optimizer=optim.Adam(unet.parameters(), lr=1e-4),
-    dataset_loader=dataset_loader
+    optimizer=optim.Adam(unet.parameters(), lr=1e-4)
 )
 
 result_path = path.join(".", "result")
@@ -112,22 +107,32 @@ train_path = path.join(result_path, "train")
 
 epoch = 50
 
-model_name = f"trained_epoch={epoch}"
-model_save_path = path.join(train_path, model_name)
-loss_list, validation_loss = model.run(device=device, epochs=epoch, save_file_path=model_save_path)
+model_name = f"trained_nUnet_epoch={epoch}"
+# loss_list, validation_loss = model.run(device=device, epochs=epoch, save_file_path=model_save_path)
 
-# scenario = CI_scenario(model=model, 
-#             scheduler=CI(
-#                 batch_size=batch_size, 
-#                 class_schedule_list=[],
-#                 class_dataset_list=[]))
+whole_dataset = ConcatDataset([
+    training_data,
+    test_data
+])
 
-x = list(range(1, epoch+1))
+label_schedule_list = [[0, 2, 4, 6, 8], [1, 3], [5, 7], [9]]
+scenario = CI_scenario(model=model, 
+            scheduler=CI(
+                batch_size=batch_size,
+                portion=(0.7, 0.2, 0.1),
+                label_schedule_list=label_schedule_list,
+                dataset=whole_dataset))
 
-y = loss_list
+task_running_list = scenario.run(
+    device=device, epochs=epoch, 
+    save_file_path=train_path, save_file_name=model_name)
+
+x = list(range(1, len(label_schedule_list)+1))
+
+y = [i[0] for i in task_running_list]
 plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='train')
 
-y = validation_loss
+y = [i[1] for i in task_running_list]
 plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='validation')
 
 # 그래프에 제목과 라벨 추가
@@ -145,7 +150,7 @@ test_path = path.join(result_path, "test")
 
 sample_saved_path = path.join(test_path, "test.png")
 
-model.load(path.join(path.dirname(model_save_path), "best"))
+model.load(path.join(train_path, "best"))
 
 sample = model.generate()
 image = tensorToPIL(sample[0])
