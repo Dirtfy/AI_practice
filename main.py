@@ -70,7 +70,7 @@ test_data = datasets.MNIST(
     transform= image_transform
 )
 
-batch_size = 16
+batch_size = 128
 
 diffusion_step = 1000
 
@@ -103,9 +103,9 @@ model = DiffusionModel(
 )
 
 result_path = path.join(".", "result")
-train_path = path.join(result_path, "train")
+train_path = path.join(result_path, "train", "ci_test")
 
-epoch = 50
+epoch = 1
 
 model_name = f"trained_nUnet_epoch={epoch}"
 # loss_list, validation_loss = model.run(device=device, epochs=epoch, save_file_path=model_save_path)
@@ -155,7 +155,7 @@ test_path = path.join(result_path, "test")
 
 sample_saved_path = path.join(test_path, "test.png")
 
-model.load(path.join(train_path, "best"))
+model.load(path.join(train_path, f"task_{len(label_schedule_list)}", f"{model_name}_best"))
 
 sample = model.generate()
 image = tensorToPIL(sample[0])
