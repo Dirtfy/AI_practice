@@ -105,7 +105,7 @@ model = DiffusionModel(
 result_path = path.join(".", "result")
 train_path = path.join(result_path, "train", "ci_test")
 
-epoch = 1
+epoch = 150
 
 model_name = f"trained_nUnet_epoch={epoch}"
 # loss_list, validation_loss = model.run(device=device, epochs=epoch, save_file_path=model_save_path)
@@ -132,17 +132,35 @@ task_running_list = scenario.run(
     epochs=epoch, 
     save_file_path=train_path, save_file_name=model_name)
 
+for i, task_result in enumerate(task_running_list):
+    x = list(range(1, epoch+1))
+    train, val = tuple(task_result)
+    plt.plot(x, train, marker='o', linestyle='-', linewidth=2, markersize=6, label='train')
+    plt.plot(x, val, marker='o', linestyle='-', linewidth=2, markersize=6, label='val')
+
+    # 그래프에 제목과 라벨 추가
+    plt.title("epoch loss")
+    plt.xlabel("epoch")
+    plt.ylabel("loss")
+    plt.legend()
+
+    graph_path = path.join(train_path, f"task_{i+1}","loss_line_plot.png")
+    # 그래프 이미지 파일로 저장
+    plt.savefig(graph_path, format="png", dpi=300)  # png 형식으로 저장, 해상도 설정
+
+    plt.clf()
+
 x = list(range(1, len(label_schedule_list)+1))
 
-y = [i[0] for i in task_running_list]
+y = [sum(i[0]) for i in task_running_list]
 plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='train')
 
-y = [i[1] for i in task_running_list]
+y = [sum(i[1]) for i in task_running_list]
 plt.plot(x, y, marker='o', linestyle='-', linewidth=2, markersize=6, label='validation')
 
 # 그래프에 제목과 라벨 추가
-plt.title("loss")
-plt.xlabel("epoch")
+plt.title("task loss")
+plt.xlabel("task")
 plt.ylabel("loss")
 plt.legend()
 

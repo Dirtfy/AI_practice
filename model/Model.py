@@ -45,8 +45,8 @@ class Model(metaclass=ABCMeta):
                 best_path = path.join(save_path, save_name+"_best")
                 self.save(best_path)
 
-            epoch_save_path = path.join(save_path, save_name+f"_epoch_{epoch}")
-            self.save(epoch_save_path)
+            # epoch_save_path = path.join(save_path, save_name+f"_epoch_{epoch}")
+            # self.save(epoch_save_path)
 
             print(f"Validation Loss after Epoch [{epoch+1}/{epochs}]: {val_loss:.4f}")
 
