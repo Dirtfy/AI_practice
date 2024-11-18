@@ -38,9 +38,9 @@ class DiffusionModel(Model):
             epoch_loss += loss.item()
 
             if (i + 1) % 100 == 0:  # 100 배치마다 손실 출력
-                print(f"Epoch [{now_epoch+1}/{total_epoch}], 
-                      Step [{i+1}/{len(self.dataset_loader.train)}], 
-                      Loss: {batch_loss/100:.4f}")
+                print(f"Epoch [{now_epoch+1}/{total_epoch}], "+
+                      f"Step [{i+1}/{len(train_dataloader)}], "+
+                      f"Loss: {batch_loss/100:.4f}")
                 batch_loss = 0.0
 
         return epoch_loss

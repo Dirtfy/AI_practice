@@ -5,6 +5,8 @@ import torch.nn as nn
 
 from abc import *
 
+from dataloader.SplitedDataLoader import SplitedDataLoader
+
 class Model(metaclass=ABCMeta):
 
     def __init__(self,
@@ -25,7 +27,6 @@ class Model(metaclass=ABCMeta):
         for epoch in range(epochs):
             epoch_loss = self.train_loop(
                 train_dataloader=train_dataloader,
-                validation_dataloader=validation_dataloader,
                 total_epoch=epochs, 
                 now_epoch=epoch
                 )
@@ -48,8 +49,6 @@ class Model(metaclass=ABCMeta):
             self.save(epoch_save_path)
 
             print(f"Validation Loss after Epoch [{epoch+1}/{epochs}]: {val_loss:.4f}")
-
-            self.save()
 
         print("Finished Training")
 
@@ -96,17 +95,17 @@ class Model(metaclass=ABCMeta):
 
 
     def run(self,
-            train_dataloader, validation_dataloader, test_dataloader, 
+            splited_dataloader: SplitedDataLoader,
             epochs, save_file_path, save_file_name):
         
         epoch_loss_list, validation_loss_list = self.train(
-            train_dataloader=train_dataloader, 
-            validation_dataloader=validation_dataloader,
+            train_dataloader=splited_dataloader.train, 
+            validation_dataloader=splited_dataloader.validatioin,
             epochs=epochs, 
             save_name=save_file_name,
             save_path=save_file_path)
 
-        self.test(dataloader=test_dataloader)
+        self.test(dataloader=splited_dataloader.test)
 
         final_save_path = path.join(save_file_path, save_file_name)
         self.save(final_save_path)

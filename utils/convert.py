@@ -1,3 +1,5 @@
+import os.path as path
+
 import torch
 from torchvision.transforms import ToPILImage
 
@@ -11,3 +13,8 @@ def tensorToPIL(tensor: torch.Tensor) -> Image:
 
     return ToPILImage()(tensor)
 
+def dictToPath(dict: dict) -> path:
+    now_path = ""
+    for key, value in dict:
+        now_path = path.join(now_path, f"{key}={value}")
+    return now_path

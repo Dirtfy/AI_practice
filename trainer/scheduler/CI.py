@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import random
 
 import torch
@@ -8,20 +8,35 @@ from torch.utils.data import ConcatDataset
 from torch.utils.data import Subset
 
 from dataloader.SplitedDataSet import SplitedDataSet
-from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from dataloader.SplitedDataLoader import SplitedDataLoader
 
 class CI():
     def __init__(self,
                  batch_size,
                  portion,
-                 label_schedule_list: List,
-                 dataset: Dataset):
+                 dataset: Dataset,
+                 dataset_by_label: dict = None,
+                 label_schedule_list: List = None,
+                 count_schedule_list: List = None):
+        assert not (label_schedule_list is None and count_schedule_list is None)
+        assert not (label_schedule_list is not None and count_schedule_list is not None)
+
         self.batch_size = batch_size
-        self.label_schedule_list = label_schedule_list
         self.dataset = dataset
         self.portion = portion
 
-        self.dataset_by_label = self.split_by_class()
+        if dataset_by_label is not None:
+            self.dataset_by_label = dataset_by_label
+        else:
+            print("extracting labels from dataset")
+            self.label_list = torch.tensor([label for _, label in dataset]).unique().tolist()
+            self.dataset_by_label = self.split_by_class()
+            for label, dataset in self.dataset_by_label.items():
+                torch.save(dataset, f"data/mnist_{label}.pth")
+
+        self.label_schedule_list = label_schedule_list \
+            if label_schedule_list is not None else self.make_schedule()
+        self.count_schedule_list = count_schedule_list
 
         self.now_task = 0
         self.last_task = len(label_schedule_list)-1
@@ -31,14 +46,32 @@ class CI():
         주어진 클래스(target_class)에 해당하는 데이터만 포함된 하위 데이터셋 반환
         """
 
-        label_list = torch.tensor([label for _, label in self.dataset]).unique()
         splited_dataset = {}
-        for target_label in label_list:
+        print("splitting dataset by label")
+        for target_label in self.label_list:
+            print(f"by {target_label}")
             indices = [i for i, (_, label) in enumerate(self.dataset) if label == target_label]
             splited_dataset[target_label] = Subset(self.dataset, indices)
         
         return splited_dataset
     
+    def sample(self, list, count):
+        selected = random.sample(list, count)
+        for i in selected:
+            list.remove(i)
+        return selected, list
+
+    def make_schedule(self):
+        label_list = self.label_list[::]
+
+        label_schedule_list = []
+        for count in self.count_schedule_list:
+            selected, _ = self.sample(label_list, count)
+            label_schedule_list.append(selected)
+
+        return label_schedule_list
+
+
     def __iter__(self):
         return self
 
@@ -53,7 +86,7 @@ class CI():
 
             self.now_task += 1
 
-            return SplitedDataSetLoader(
+            return SplitedDataLoader(
                 batch_size=self.batch_size,
                 portion=self.portion,
                 dataset=dataset)

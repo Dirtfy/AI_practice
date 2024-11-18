@@ -24,7 +24,7 @@ from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
 
 from dataloader.SplitedDataSet import SplitedDataSet
-from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from dataloader.SplitedDataLoader import SplitedDataLoader
 
 from trainer.CI_scenario import CI_scenario
 from trainer.scheduler.CI import CI
@@ -115,16 +115,21 @@ whole_dataset = ConcatDataset([
     test_data
 ])
 
+dataset_by_label = {}
+for label in range(10):
+    dataset_by_label[label] = torch.load(f"./data/MNIST/raw/byLabels/mnist_{label}.pth")
+
 label_schedule_list = [[0, 2, 4, 6, 8], [1, 3], [5, 7], [9]]
 scenario = CI_scenario(model=model, 
             scheduler=CI(
                 batch_size=batch_size,
                 portion=(0.7, 0.2, 0.1),
                 label_schedule_list=label_schedule_list,
-                dataset=whole_dataset))
+                dataset=whole_dataset,
+                dataset_by_label=dataset_by_label))
 
 task_running_list = scenario.run(
-    device=device, epochs=epoch, 
+    epochs=epoch, 
     save_file_path=train_path, save_file_name=model_name)
 
 x = list(range(1, len(label_schedule_list)+1))

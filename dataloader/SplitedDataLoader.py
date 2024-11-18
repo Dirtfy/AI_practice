@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, Subset, DataLoader
 from .SplitedDataSet import SplitedDataSet
 
 
-class SplitedDataSetLoader():
+class SplitedDataLoader():
     def __init__(self,
                  batch_size,
                  portion,
@@ -30,8 +30,8 @@ class SplitedDataSetLoader():
     def split_by_portion(self, dataset):
         dataset_size = len(dataset)
 
-        train = dataset_size*self.portion[0]
-        val = dataset_size*self.portion[1]
+        train = int(dataset_size*self.portion[0])
+        val = int(dataset_size*self.portion[1])
         test = dataset_size-(train+val)
 
         indices = list(range(dataset_size))

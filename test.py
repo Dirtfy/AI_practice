@@ -10,13 +10,15 @@ import os.path as path
 import matplotlib.pyplot as plt
 
 from model.architecture.Unet import Unet
-from model.architecture.Unet import SinusoidalPositionEmbedding
+from model.embedding.SinusoidalPositionEmbedding import SinusoidalPositionEmbedding
 from model.architecture.Unet2 import UNet as Unet2
+from model.architecture.unet.Unet import Unet as nUnet
+
 from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
 
 from dataloader.SplitedDataSet import SplitedDataSet
-from dataloader.SplitedDataSetLoader import SplitedDataSetLoader
+from dataloader.SplitedDataLoader import SplitedDataSetLoader
 
 from trainer.CI_scenario import CI_scenario
 from trainer.scheduler.CI import CI
@@ -38,13 +40,12 @@ image_shape = (1, 32, 32)
 
 diffusion_step = 1000
 
-unet = Unet(
-    channel=image_shape[0], 
-    max_channel=1024,
-    time_embedding=SinusoidalPositionEmbedding(
-        device=device, dim=image_shape[0], max_position=diffusion_step
-        )
-    ).to(device)
+t_emb_dim = image_shape[0]
+unet = nUnet(shape=image_shape, depth=5,
+             t_emb_dim=t_emb_dim,
+             time_embedding=SinusoidalPositionEmbedding(
+                 device=device,
+                 dim=t_emb_dim,max_position=diffusion_step)).to(device)
 
 ddpm = DDPM(
     device=device,
@@ -56,8 +57,7 @@ ddpm = DDPM(
 model = DiffusionModel(
     architecture=unet,
     method=ddpm,
-    optimizer=optim.Adam(unet.parameters(), lr=1e-4),
-    dataset_loader=None
+    optimizer=optim.Adam(unet.parameters(), lr=1e-4)
 )
 
 model.load("/home/mskim/project/AI_practice/result/train/best")
