@@ -4,7 +4,6 @@ import math
 
 class SinusoidalPositionEmbedding(nn.Module):
     def __init__(self, 
-                 device,
                  dim, 
                  max_position):
         super(SinusoidalPositionEmbedding, self).__init__()
@@ -12,7 +11,7 @@ class SinusoidalPositionEmbedding(nn.Module):
         self.max_position = max_position
 
         # Position Embedding을 계산하는 함수
-        self.position_embeddings = self._get_position_embeddings().to(device)
+        self.position_embeddings = self._get_position_embeddings()
 
     def _get_position_embeddings(self):
         """
@@ -34,4 +33,5 @@ class SinusoidalPositionEmbedding(nn.Module):
         주어진 위치에 대해 임베딩을 반환
         position_ids: (batch_size, seq_len) 위치 인덱스 텐서
         """
+        self.position_embeddings = self.position_embeddings.to(position_ids.device)
         return self.position_embeddings[position_ids]

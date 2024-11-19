@@ -1,30 +1,18 @@
 import torch
 import torch.optim as optim
 
-from torch.utils.data import Dataset
 from torch.utils.data import ConcatDataset
-from torch.utils.data import Subset
 
 from torchvision import datasets
-from torchvision.transforms import ToPILImage
 from torchvision import transforms
 
 import os.path as path
 
 import matplotlib.pyplot as plt
 
-from model.architecture.Unet import Unet
-from model.architecture.Unet import SinusoidalPositionEmbedding
-from model.architecture.Unet2 import UNet as Unet2
-from model.architecture.unet.Unet import Unet as nUnet
-
-from model.embedding.SinusoidalPositionEmbedding import SinusoidalPositionEmbedding
-
+from model.architecture.unet.Unet import Unet
 from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
-
-from dataloader.SplitedDataSet import SplitedDataSet
-from dataloader.SplitedDataLoader import SplitedDataLoader
 
 from trainer.CI_scenario import CI_scenario
 from trainer.scheduler.CI import CI
@@ -70,32 +58,18 @@ test_data = datasets.MNIST(
     transform= image_transform
 )
 
-batch_size = 128
-
 diffusion_step = 1000
 
-# unet = Unet(
-#     image_shape=image_shape,
-#     max_channel=1024,
-#     time_embedding=SinusoidalPositionEmbedding(
-#         device=device, dim=image_shape[0], max_position=diffusion_step
-#         )
-#     ).to(device)
-# unet = Unet2(n_channels=1*2, n_classes=1).to(device)
 t_emb_dim = image_shape[0]
-unet = nUnet(shape=image_shape, depth=5,
+unet = Unet(input_shape=image_shape, depth=5,
              t_emb_dim=t_emb_dim,
-             time_embedding=SinusoidalPositionEmbedding(
-                 device=device,
-                 dim=t_emb_dim,max_position=diffusion_step)).to(device)
-
+             t_max_position=diffusion_step).to(device)
 ddpm = DDPM(
     device=device,
     image_shape=image_shape,
     diffusion_steps=diffusion_step,
     beta_schedule=torch.linspace(0.0001, 0.02, diffusion_step)
 )
-
 model = DiffusionModel(
     architecture=unet,
     method=ddpm,
@@ -105,7 +79,8 @@ model = DiffusionModel(
 result_path = path.join(".", "result")
 train_path = path.join(result_path, "train", "ci_test")
 
-epoch = 150
+epoch = 1000
+batch_size = 128
 
 model_name = f"trained_nUnet_epoch={epoch}"
 # loss_list, validation_loss = model.run(device=device, epochs=epoch, save_file_path=model_save_path)
@@ -119,7 +94,8 @@ dataset_by_label = {}
 for label in range(10):
     dataset_by_label[label] = torch.load(f"./data/MNIST/raw/byLabels/mnist_{label}.pth")
 
-label_schedule_list = [[0, 2, 4, 6, 8], [1, 3], [5, 7], [9]]
+# label_schedule_list = [[5]]
+label_schedule_list = [list(range(10))]
 scenario = CI_scenario(model=model, 
             scheduler=CI(
                 batch_size=batch_size,

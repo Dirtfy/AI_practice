@@ -31,12 +31,10 @@ class CI():
             print("extracting labels from dataset")
             self.label_list = torch.tensor([label for _, label in dataset]).unique().tolist()
             self.dataset_by_label = self.split_by_class()
-            for label, dataset in self.dataset_by_label.items():
-                torch.save(dataset, f"data/mnist_{label}.pth")
 
+        self.count_schedule_list = count_schedule_list
         self.label_schedule_list = label_schedule_list \
             if label_schedule_list is not None else self.make_schedule()
-        self.count_schedule_list = count_schedule_list
 
         self.now_task = 0
         self.last_task = len(label_schedule_list)-1

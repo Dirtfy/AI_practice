@@ -9,23 +9,19 @@ from dataloader.SplitedDataLoader import SplitedDataLoader
 
 class Model(metaclass=ABCMeta):
 
-    def __init__(self,
-                 architecture: nn.Module):
-        
-        self.architecture = architecture
-        self.device = next(architecture.parameters()).device
+    def __init__(self):
+        super().__init__()
 
     def train(self, train_dataloader, validation_dataloader, 
               epochs, 
               save_name,
               save_path):
-        self.architecture.train()  # 모델을 학습 모드로 설정
 
         epoch_loss_list = []
         epoch_validation_loss_list = []
 
         for epoch in range(epochs):
-            epoch_loss = self.train_loop(
+            epoch_loss = self.train_epoch(
                 train_dataloader=train_dataloader,
                 total_epoch=epochs, 
                 now_epoch=epoch
@@ -55,25 +51,23 @@ class Model(metaclass=ABCMeta):
         return epoch_loss_list, epoch_validation_loss_list
 
     @abstractmethod
-    def train_loop(self, train_dataloader, total_epoch, now_epoch):
-        pass
+    def train_epoch(self, train_dataloader, total_epoch, now_epoch):
+        raise NotImplementedError
 
     def validate(self, dataloader):
-        self.architecture.eval()  # 평가 모드로 전환
 
         with torch.no_grad():  # 그래디언트 계산을 하지 않음
-            total_loss = self.validate_loop(dataloader=dataloader)
+            total_loss = self.validate_epoch(dataloader=dataloader)
         
         avg_loss = total_loss / len(dataloader)
-        self.architecture.train()  # 다시 학습 모드로 전환
+
         return avg_loss
     
     @abstractmethod
-    def validate_loop(self, dataloader):
-        pass
+    def validate_epoch(self, dataloader):
+        raise NotImplementedError
 
     def test(self, dataloader):
-        self.architecture.eval()  # 평가 모드로 전환
         
         with torch.no_grad():  # 그래디언트 계산을 하지 않음
             total_loss = self.test_loop(dataloader=dataloader)
@@ -83,7 +77,7 @@ class Model(metaclass=ABCMeta):
 
     @abstractmethod
     def test_loop(self, dataloader):
-        pass
+        raise NotImplementedError
 
 
     def save(self, file_path):

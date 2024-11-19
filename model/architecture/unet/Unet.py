@@ -6,17 +6,17 @@ from model.architecture.unet.base.ConvBlock import *
 from model.architecture.unet.base.DownBlock import *
 from model.architecture.unet.base.UpBlock import *
 
-from model.embedding.SinusoidalPositionEmbedding import SinusoidalPositionEmbedding
+from model.architecture.embedding.SinusoidalPositionEmbedding import SinusoidalPositionEmbedding
 
 class Unet(Base):
     def __init__(self,
-                 shape,
+                 input_shape,
                  depth,
                  t_emb_dim,
-                 time_embedding):
+                 t_max_position):
         super().__init__()
 
-        channel_schedule = [shape[0], *[32*(2**i) for i in range(depth+1)]]
+        channel_schedule = [input_shape[0], *[32*(2**i) for i in range(depth+1)]]
         print(channel_schedule)
         group_schedule = [1, *[8 for _ in range(depth)]]
 
@@ -39,11 +39,16 @@ class Unet(Base):
         ])
         self.out_block = nn.Sequential(
             nn.GroupNorm(num_groups=group_schedule[1], num_channels=channel_schedule[1]),
-            nn.Conv2d(in_channels=channel_schedule[1], out_channels=shape[0],
+            nn.Conv2d(in_channels=channel_schedule[1], out_channels=input_shape[0],
                       kernel_size=3, padding=1)
         )
 
-        self.time_embedding = time_embedding
+        self.time_embedding = SinusoidalPositionEmbedding(
+            dim=t_emb_dim,
+            max_position=t_max_position
+        )
+
+        
 
 
     def forward(self, x, time):

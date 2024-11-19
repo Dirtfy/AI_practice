@@ -10,15 +10,19 @@ class DiffusionModel(Model):
                  architecture: nn.Module,
                  method: Diffusion,
                  optimizer: Optimizer):
-        super().__init__(
-            architecture=architecture
-            )
+        super().__init__()
         
-        self.method = method
-
+        self.architecture = architecture
         self.optimizer = optimizer
 
-    def train_loop(self, train_dataloader, total_epoch, now_epoch):
+        self.method = method
+
+        self.device = next(architecture.parameters()).device
+
+
+    def train_epoch(self, train_dataloader, total_epoch, now_epoch):
+        self.architecture.train()
+
         epoch_loss = 0.0
         batch_loss = 0.0
 
@@ -48,7 +52,9 @@ class DiffusionModel(Model):
 
 
     # Validation 루프
-    def validate_loop(self, dataloader):
+    def validate_epoch(self, dataloader):
+        self.architecture.eval()
+
         total_loss = 0.0
         for images, _ in dataloader:
             images = images.to(self.device)
@@ -61,6 +67,7 @@ class DiffusionModel(Model):
 
     # Test 루프
     def test_loop(self, dataloader):
+        self.architecture.eval()
         
         total_loss = 0.0
         for images, _ in dataloader:
