@@ -45,7 +45,7 @@ class Base(nn.Module):
         else:
             h = call(x, t_emb, condition)
 
-        return h
+        return x, h
     
     def up_condition_check(self, call, skip, x, t_emb, condition):
         if t_emb is None and condition is None:

@@ -24,14 +24,14 @@ class CTC(nn.Module):
                                         ,kernel_size=1)
 
 
-    def forward(self, x, t_emb):
+    def forward(self, x, t_emb, c_emb=None):
         residual = x
 
         x = self.first_conv(x)
 
         t_emb = self.time_emb_layer(t_emb)
         t_emb = t_emb.reshape(*x.shape[:2], 1, 1)
-        x = x+t_emb
+        x = x+t_emb+c_emb
 
         x = self.second_conv(x)
 
@@ -40,7 +40,7 @@ class CTC(nn.Module):
         
         return x
 
-class GSA(nn.Module):
+class GA(nn.Module):
     def __init__(self,
                 num_group,
                 num_head, channels):
@@ -49,7 +49,7 @@ class GSA(nn.Module):
         self.attention_norm = nn.GroupNorm(num_groups=num_group,num_channels=channels)
         self.attention = nn.MultiheadAttention(embed_dim=channels,num_heads=num_head,batch_first=True)
 
-    def forward(self, x):
+    def forward(self, x, c_emb=None):
 
         residual = x
 
@@ -59,12 +59,16 @@ class GSA(nn.Module):
         x = self.attention_norm(x)
 
         x = x.permute(0, 2, 1)
-        x, _ = self.attention(x, x, x)
+        if c_emb is not None:
+            x, _ = self.attention(c_emb, x, x)
+        else:
+            x, _ = self.attention(x, x, x)
         x = x.permute(0, 2, 1).reshape(batch_size, channels, h, w)
 
         x = x+residual
         
         return x
+
 
 class CTCA(nn.Module):
     def __init__(self,
@@ -78,13 +82,13 @@ class CTCA(nn.Module):
                        t_emb_dim=t_emb_dim,
                        in_channels=in_channels,out_channels=out_channels)
 
-        self.gsa = GSA(num_group=num_group,
+        self.ga = GA(num_group=num_group,
                        num_head=num_head,channels=out_channels)
 
-    def forward(self, x, t_emb):
-        x = self.ctc(x, t_emb)
+    def forward(self, x, t_emb, c_emb=None):
+        x = self.ctc(x, t_emb, c_emb)
 
-        x = self.gsa(x)
+        x = self.ga(x, c_emb)
         
         return x
 
@@ -100,18 +104,18 @@ class CAC(nn.Module):
                        t_emb_dim=t_emb_dim,
                        in_channels=in_channels,out_channels=out_channels)
 
-        self.gsa = GSA(num_group=num_group,
+        self.ga = GA(num_group=num_group,
                        num_head=num_head,channels=out_channels)
         
         self.second_ctc = CTC(num_group=num_group, 
                        t_emb_dim=t_emb_dim,
                        in_channels=out_channels,out_channels=out_channels)
 
-    def forward(self, x, t_emb):
-        x = self.first_ctc(x, t_emb)
+    def forward(self, x, t_emb, c_emb=None):
+        x = self.first_ctc(x, t_emb, c_emb)
 
-        x = self.gsa(x)
+        x = self.ga(x, c_emb)
 
-        x = self.second_ctc(x, t_emb)
+        x = self.second_ctc(x, t_emb, c_emb)
         
         return x

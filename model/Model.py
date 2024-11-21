@@ -79,13 +79,13 @@ class Model(metaclass=ABCMeta):
     def test_loop(self, dataloader):
         raise NotImplementedError
 
-
+    @abstractmethod
     def save(self, file_path):
-        torch.save(self.architecture.state_dict(), file_path)
+        raise NotImplementedError
     
-
+    @abstractmethod
     def load(self, file_path):
-        self.architecture.load_state_dict(torch.load(file_path))
+        raise NotImplementedError
 
 
     def run(self,

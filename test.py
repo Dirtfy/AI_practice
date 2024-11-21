@@ -16,7 +16,7 @@ from model.method.diffusion.DDPM import DDPM
 from model.DiffusionModel import DiffusionModel
 
 
-from trainer.CI_scenario import CI_scenario
+from trainer.Trainer import CI_scenario
 from trainer.scheduler.CI import CI
 
 from logger.FileLogger import FileLogger
@@ -37,11 +37,9 @@ image_shape = (1, 32, 32)
 diffusion_step = 1000
 
 t_emb_dim = image_shape[0]
-unet = nUnet(shape=image_shape, depth=5,
+unet = nUnet(input_shape=image_shape, depth=5,
              t_emb_dim=t_emb_dim,
-             time_embedding=SinusoidalPositionEmbedding(
-                 device=device,
-                 dim=t_emb_dim,max_position=diffusion_step)).to(device)
+             t_max_position=diffusion_step).to(device)
 
 ddpm = DDPM(
     device=device,
@@ -56,7 +54,7 @@ model = DiffusionModel(
     optimizer=optim.Adam(unet.parameters(), lr=1e-4)
 )
 
-model.load("/home/mskim/project/AI_practice/result/train/ci_test/task_3/trained_nUnet_epoch=150_best")
+model.load("/home/mskim/project/AI_practice/result/train/ci_test/task_1/trained_nUnet_epoch=1000")
 
 sample = model.generate()
 print(sample.min())

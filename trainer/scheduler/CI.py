@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List
 import random
 
 import torch
@@ -7,23 +7,20 @@ from torch.utils.data import Dataset
 from torch.utils.data import ConcatDataset
 from torch.utils.data import Subset
 
-from dataloader.SplitedDataSet import SplitedDataSet
-from dataloader.SplitedDataLoader import SplitedDataLoader
+from .base.Scheduler import Scheduler
 
-class CI():
+class CI(Scheduler):
     def __init__(self,
-                 batch_size,
-                 portion,
-                 dataset: Dataset,
+                 whole_dataset: Dataset = None,
                  dataset_by_label: dict = None,
                  label_schedule_list: List = None,
                  count_schedule_list: List = None):
+        super().__init__()
+
         assert not (label_schedule_list is None and count_schedule_list is None)
         assert not (label_schedule_list is not None and count_schedule_list is not None)
 
-        self.batch_size = batch_size
-        self.dataset = dataset
-        self.portion = portion
+        self.dataset = whole_dataset
 
         if dataset_by_label is not None:
             self.dataset_by_label = dataset_by_label
@@ -74,7 +71,7 @@ class CI():
         return self
 
 
-    def __next__(self):
+    def __next__(self) -> Dataset:
         if self.now_task <= self.last_task:
 
             dataset = ConcatDataset([
@@ -84,9 +81,6 @@ class CI():
 
             self.now_task += 1
 
-            return SplitedDataLoader(
-                batch_size=self.batch_size,
-                portion=self.portion,
-                dataset=dataset)
+            return dataset
         else:
             raise StopIteration

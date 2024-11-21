@@ -1,10 +1,12 @@
+import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 
 from .Model import Model
 from .method.diffusion.base.Diffusion import Diffusion
+from .Category import Generator
 
-class DiffusionModel(Model):
+class DiffusionModel(Model, Generator):
 
     def __init__(self,
                  architecture: nn.Module,
@@ -32,7 +34,7 @@ class DiffusionModel(Model):
             self.optimizer.zero_grad()
             
             # 모델의 학습 단계
-            loss = self.method.training_step(self.architecture, images)
+            loss = self.method.train_batch(self.architecture, images)
             
             # 손실 역전파
             loss.backward()
@@ -60,7 +62,7 @@ class DiffusionModel(Model):
             images = images.to(self.device)
             
             # 모델의 예측 단계
-            loss = self.method.training_step(self.architecture, images)
+            loss = self.method.train_batch(self.architecture, images)
             total_loss += loss.item()
 
         return total_loss
@@ -74,10 +76,18 @@ class DiffusionModel(Model):
             images = images.to(self.device)
             
             # 모델의 예측 단계
-            loss = self.method.training_step(self.architecture, images)
+            loss = self.method.train_batch(self.architecture, images)
             total_loss += loss.item()
 
         return total_loss
     
-    def generate(self):
-        return self.method.generate(self.architecture, 1)
+    def generate(self, num_sample, *condition) -> torch.Tensor:
+        return self.method.generate(
+            self.architecture, 
+            num_images=num_sample)
+    
+    def save(self, file_path):
+        torch.save(self.architecture.state_dict(), file_path)
+
+    def load(self, file_path):
+        self.architecture.load_state_dict(torch.load(file_path))

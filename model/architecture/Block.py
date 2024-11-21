@@ -43,8 +43,8 @@ class GA(nn.Module):
             nn.MultiheadAttention(embed_dim=channels,num_heads=num_heads,batch_first=True)
         )
 
-    def forward(self, x):
-        return self.block(x)
+    def forward(self, q, k, v):
+        return self.block(q, k, v)
     
 
 class ResidualBlock(nn.Module):

@@ -6,11 +6,11 @@ from .base.Diffusion import Diffusion
 
 from utils.convert import tensorToPIL
 
-class DDPM(Diffusion):
+class DDIM(Diffusion):
     def __init__(self, 
-                 device,
-                 image_shape,
-                 beta_schedule):
+                device,
+                image_shape,
+                beta_schedule):
         super().__init__(
             device=device,
             image_shape=image_shape,
@@ -43,7 +43,7 @@ class DDPM(Diffusion):
              ((1-alpha_t) / torch.sqrt(1 - alpha_bar_t)) * predicted_noise) \
                 + sigma_t*noise
 
-    def p_sample(self, architecture,  xt, y):
+    def p_sample(self, architecture,  xt):
         current_image = xt
 
         batch_size = xt.shape[0]
@@ -65,10 +65,10 @@ class DDPM(Diffusion):
 
         return current_image
 
-    def train_batch(self, architecture, x0, y):
+    def train_batch(self, architecture, x0):
         t = torch.randint(0, self.diffusion_steps, (x0.size(0),), device=x0.device).long()
 
-        xt, noise = self.q_sample(x0, t)
+        xt, noise = self.forward_diffusion(x0, t)
 
         predicted_noise = architecture(xt, t)
 
@@ -76,9 +76,9 @@ class DDPM(Diffusion):
 
         return loss
 
-    def generate(self, architecture, num_images, y):
+    def generate(self, architecture, num_images):
         initial_noise = torch.randn(
             num_images, *self.image_shape
             ).to(next(architecture.parameters()).device)
         
-        return self.p_sample(architecture, initial_noise)
+        return self.reverse_diffusion(architecture, initial_noise)

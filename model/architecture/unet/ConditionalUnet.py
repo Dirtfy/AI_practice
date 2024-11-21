@@ -8,12 +8,14 @@ from model.architecture.unet.base.UpBlock import *
 
 from model.architecture.embedding.SinusoidalPositionEmbedding import SinusoidalPositionEmbedding
 
-class Unet(Base):
+class ConditionalUnet(Base):
     def __init__(self,
                  input_shape,
                  depth,
                  t_emb_dim,
-                 t_max_position):
+                 t_max_position,
+                 num_class,
+                 c_emb_dim):
         super().__init__()
 
         channel_schedule = [input_shape[0], *[32*(2**i) for i in range(depth+1)]]
@@ -48,10 +50,18 @@ class Unet(Base):
             max_position=t_max_position
         )
 
-    def forward(self, x, time):
-        t_emb = self.time_embedding(time)
+        self.condition_embedding = nn.Sequential(
+            nn.Embedding(num_class, c_emb_dim),
+            nn.Linear(c_emb_dim, c_emb_dim),
+            nn.ReLU(),
+            nn.Linear(c_emb_dim, c_emb_dim)
+        )
 
-        return super().forward(x, t_emb, None)
+    def forward(self, x, time, condition):
+        t_emb = self.time_embedding(time)
+        c_emb = self.condition_embedding(condition)
+
+        return super().forward(x, t_emb, c_emb)
 
 
 class DownBlock(nn.Module):
@@ -68,8 +78,8 @@ class DownBlock(nn.Module):
         
         self.down = ConvDown(in_channels=out_channels,out_channels=out_channels)
 
-    def forward(self, x, t_emb):
-        h = self.block(x, t_emb)
+    def forward(self, x, t_emb, c_emb):
+        h = self.block(x, t_emb, c_emb)
         x = self.down(h)
         return x, h
     
@@ -85,8 +95,8 @@ class MidBlock(nn.Module):
                          num_head=num_head,
                          in_channels=in_channels,out_channels=out_channels)
 
-    def forward(self, x, t_emb):
-        return self.block(x, t_emb)
+    def forward(self, x, t_emb, c_emb):
+        return self.block(x, t_emb, c_emb)
     
 class UpBlock(nn.Module):
     def __init__(self,
@@ -101,10 +111,10 @@ class UpBlock(nn.Module):
                           num_head=num_head,
                           in_channels=in_channels,out_channels=out_channels)
         
-    def forward(self, skipped, x, t_emb):
+    def forward(self, skipped, x, t_emb, c_emb):
         x = self.up(x)
         x = torch.cat([x, skipped], dim=1)
 
-        x = self.block(x, t_emb)
+        x = self.block(x, t_emb, c_emb)
 
         return x

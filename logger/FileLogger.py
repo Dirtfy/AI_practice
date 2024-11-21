@@ -1,14 +1,17 @@
 import logging
 import builtins
+import os
 import os.path as path
 
 class FileLogger():
     def __init__(self,
+                 file_path,
                  file_name):
         self.origin_print = builtins.print
 
-        base = path.join("result", "log")
-        target_path = path.join(base, file_name)
+        os.makedirs(file_path)
+
+        target_path = path.join(file_path, file_name)
         
         # 로깅 설정
         logger = logging.getLogger()
