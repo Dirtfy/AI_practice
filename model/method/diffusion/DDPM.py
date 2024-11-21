@@ -51,7 +51,7 @@ class DDPM(Diffusion):
         for step in reversed(range(self.diffusion_steps)):
             t = torch.full((batch_size, ), step, dtype=torch.long, device=self.device)
 
-            predicted_noise = architecture(current_image, t)
+            predicted_noise = architecture(current_image, t, y)
 
             current_image = self.denoising(current_image, t, predicted_noise)
 
@@ -70,7 +70,7 @@ class DDPM(Diffusion):
 
         xt, noise = self.q_sample(x0, t)
 
-        predicted_noise = architecture(xt, t)
+        predicted_noise = architecture(xt, t, y)
 
         loss = F.mse_loss(predicted_noise, noise)
 
@@ -79,6 +79,8 @@ class DDPM(Diffusion):
     def generate(self, architecture, num_images, y):
         initial_noise = torch.randn(
             num_images, *self.image_shape
-            ).to(next(architecture.parameters()).device)
+            ).to(self.device)
         
-        return self.p_sample(architecture, initial_noise)
+        y = torch.tensor([y for _ in range(num_images)]).to(self.device)
+        
+        return self.p_sample(architecture, initial_noise, y)

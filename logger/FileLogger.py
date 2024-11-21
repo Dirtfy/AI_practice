@@ -9,8 +9,6 @@ class FileLogger():
                  file_name):
         self.origin_print = builtins.print
 
-        os.makedirs(file_path)
-
         target_path = path.join(file_path, file_name)
         
         # 로깅 설정

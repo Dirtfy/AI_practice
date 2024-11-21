@@ -24,14 +24,14 @@ class CTC(nn.Module):
                                         ,kernel_size=1)
 
 
-    def forward(self, x, t_emb, c_emb=None):
+    def forward(self, x, t_emb):
         residual = x
 
         x = self.first_conv(x)
 
         t_emb = self.time_emb_layer(t_emb)
         t_emb = t_emb.reshape(*x.shape[:2], 1, 1)
-        x = x+t_emb+c_emb
+        x = x+t_emb
 
         x = self.second_conv(x)
 
@@ -57,13 +57,14 @@ class GA(nn.Module):
 
         x = x.reshape(batch_size, channels, h*w)
         x = self.attention_norm(x)
-
+        
         x = x.permute(0, 2, 1)
         if c_emb is not None:
-            x, _ = self.attention(c_emb, x, x)
+            c_emb = c_emb.unsqueeze(1)
+            x, _ = self.attention(x, c_emb, c_emb)
         else:
             x, _ = self.attention(x, x, x)
-        x = x.permute(0, 2, 1).reshape(batch_size, channels, h, w)
+        x = x.permute(0, 2, 1).reshape(batch_size, channels, h, w)        
 
         x = x+residual
         
@@ -74,6 +75,7 @@ class CTCA(nn.Module):
     def __init__(self,
                  num_group,
                  t_emb_dim,
+                 c_emb_dim,
                  num_head,
                  in_channels, out_channels):
         super().__init__()
@@ -81,12 +83,18 @@ class CTCA(nn.Module):
         self.ctc = CTC(num_group=num_group, 
                        t_emb_dim=t_emb_dim,
                        in_channels=in_channels,out_channels=out_channels)
+        
+        self.condition_embedding = nn.Linear(
+            in_features=c_emb_dim,
+            out_features=out_channels)
 
         self.ga = GA(num_group=num_group,
                        num_head=num_head,channels=out_channels)
 
     def forward(self, x, t_emb, c_emb=None):
-        x = self.ctc(x, t_emb, c_emb)
+        x = self.ctc(x, t_emb)
+
+        c_emb = self.condition_embedding(c_emb)        
 
         x = self.ga(x, c_emb)
         
@@ -96,6 +104,7 @@ class CAC(nn.Module):
     def __init__(self,
                  num_group,
                  t_emb_dim,
+                 c_emb_dim,
                  num_head,
                  in_channels, out_channels):
         super().__init__()
@@ -103,6 +112,10 @@ class CAC(nn.Module):
         self.first_ctc = CTC(num_group=num_group, 
                        t_emb_dim=t_emb_dim,
                        in_channels=in_channels,out_channels=out_channels)
+        
+        self.condition_embedding = nn.Linear(
+            in_features=c_emb_dim,
+            out_features=out_channels)
 
         self.ga = GA(num_group=num_group,
                        num_head=num_head,channels=out_channels)
@@ -112,10 +125,12 @@ class CAC(nn.Module):
                        in_channels=out_channels,out_channels=out_channels)
 
     def forward(self, x, t_emb, c_emb=None):
-        x = self.first_ctc(x, t_emb, c_emb)
+        x = self.first_ctc(x, t_emb)
+
+        c_emb = self.condition_embedding(c_emb)
 
         x = self.ga(x, c_emb)
 
-        x = self.second_ctc(x, t_emb, c_emb)
+        x = self.second_ctc(x, t_emb)
         
         return x

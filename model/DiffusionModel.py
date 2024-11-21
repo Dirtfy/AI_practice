@@ -28,13 +28,14 @@ class DiffusionModel(Model, Generator):
         epoch_loss = 0.0
         batch_loss = 0.0
 
-        for i, (images, _) in enumerate(train_dataloader):
+        for i, (images, labels) in enumerate(train_dataloader):
             images = images.to(self.device)  # GPU로 이동
+            labels = labels.to(self.device)
 
             self.optimizer.zero_grad()
             
             # 모델의 학습 단계
-            loss = self.method.train_batch(self.architecture, images)
+            loss = self.method.train_batch(self.architecture, images, labels)
             
             # 손실 역전파
             loss.backward()
@@ -58,11 +59,12 @@ class DiffusionModel(Model, Generator):
         self.architecture.eval()
 
         total_loss = 0.0
-        for images, _ in dataloader:
+        for images, labels in dataloader:
             images = images.to(self.device)
+            labels = labels.to(self.device)
             
             # 모델의 예측 단계
-            loss = self.method.train_batch(self.architecture, images)
+            loss = self.method.train_batch(self.architecture, images, labels)
             total_loss += loss.item()
 
         return total_loss
@@ -72,19 +74,21 @@ class DiffusionModel(Model, Generator):
         self.architecture.eval()
         
         total_loss = 0.0
-        for images, _ in dataloader:
+        for images, labels in dataloader:
             images = images.to(self.device)
+            labels = labels.to(self.device)
             
             # 모델의 예측 단계
-            loss = self.method.train_batch(self.architecture, images)
+            loss = self.method.train_batch(self.architecture, images, labels)
             total_loss += loss.item()
 
         return total_loss
     
-    def generate(self, num_sample, *condition) -> torch.Tensor:
+    def generate(self, num_sample, y) -> torch.Tensor:
         return self.method.generate(
             self.architecture, 
-            num_images=num_sample)
+            num_images=num_sample,
+            y=y)
     
     def save(self, file_path):
         torch.save(self.architecture.state_dict(), file_path)

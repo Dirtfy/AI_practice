@@ -6,6 +6,7 @@ from torch.utils.data import ConcatDataset
 from torchvision import datasets
 from torchvision import transforms
 
+import os
 import os.path as path
 
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 from dataloader.SplitedDataLoader import SplitedDataLoader
 
 from model.architecture.unet.Unet import Unet
+from model.architecture.unet.ConditionalUnet import ConditionalUnet
 from model.method.diffusion.DDPM import DDPM
 from model.method.diffusion.base.BetaScheduler import cosine_beta_schedule
 from model.DiffusionModel import DiffusionModel
@@ -31,8 +33,11 @@ graph_path = path.join(train_path, "loss_line_plot.png")
 sample_saved_path = path.join(test_path, "test.png")
 
 image_shape = (1, 32, 32)
-epoch = 10
+epoch = 100
 batch_size = 128
+
+os.makedirs(train_path)
+os.makedirs(test_path)
 
 logger = FileLogger(
     file_path=train_path,
@@ -84,9 +89,14 @@ dataset_loader = SplitedDataLoader(
 diffusion_step = 1000
 
 t_emb_dim = image_shape[0]
-unet = Unet(input_shape=image_shape, depth=5,
-             t_emb_dim=t_emb_dim,
-             t_max_position=diffusion_step).to(device)
+c_emb_dim = image_shape[0]
+unet = ConditionalUnet(
+    input_shape=image_shape, 
+    depth=5,
+    t_emb_dim=t_emb_dim,
+    t_max_position=diffusion_step,
+    num_class=10,
+    c_emb_dim=c_emb_dim).to(device)
 ddpm = DDPM(
     device=device,
     image_shape=image_shape,
@@ -127,7 +137,7 @@ plt.savefig(graph_path, format="png", dpi=300)
 
 model.load(path.join(train_path, f"{model_name}_best"))
 
-sample = model.generate()
+sample = model.generate(num_sample=1,y=6)
 image = tensorToPIL(sample[0])
 image.save(sample_saved_path)
 

@@ -19,21 +19,23 @@ class ConditionalUnet(Base):
         super().__init__()
 
         channel_schedule = [input_shape[0], *[32*(2**i) for i in range(depth+1)]]
-        print(channel_schedule)
         group_schedule = [1, *[8 for _ in range(depth)]]
 
         self.down_block_list = nn.ModuleList([
             DownBlock(t_emb_dim=t_emb_dim,
+                      c_emb_dim=c_emb_dim,
                       num_group=group_schedule[i],
                       in_channels=channel_schedule[i],
                       out_channels=channel_schedule[i+1])
                       for i in range(depth)
         ])
         self.mid_block = MidBlock(t_emb_dim=t_emb_dim,
+                                  c_emb_dim=c_emb_dim,
                             in_channels=channel_schedule[-2],
                             out_channels=channel_schedule[-1])
         self.up_block_list = nn.ModuleList([
             UpBlock(t_emb_dim=t_emb_dim,
+                    c_emb_dim=c_emb_dim,
                     num_group=group_schedule[i+1],
                     in_channels=channel_schedule[i+2],
                     out_channels=channel_schedule[i+1])
@@ -67,16 +69,20 @@ class ConditionalUnet(Base):
 class DownBlock(nn.Module):
     def __init__(self,
                  t_emb_dim,
+                 c_emb_dim,
                  in_channels, out_channels,
                  num_group=8, num_head=1):
         super().__init__()
         
         self.block = CTCA(num_group=num_group,
                           t_emb_dim=t_emb_dim,
+                          c_emb_dim=c_emb_dim,
                           num_head=num_head,
                           in_channels=in_channels,out_channels=out_channels)
         
         self.down = ConvDown(in_channels=out_channels,out_channels=out_channels)
+
+        self.inc = in_channels
 
     def forward(self, x, t_emb, c_emb):
         h = self.block(x, t_emb, c_emb)
@@ -86,12 +92,14 @@ class DownBlock(nn.Module):
 class MidBlock(nn.Module):
     def __init__(self,
                  t_emb_dim,
+                 c_emb_dim,
                  in_channels, out_channels,
                  num_group=8, num_head=1):
         super().__init__()
 
         self.block = CAC(num_group=num_group,
                          t_emb_dim=t_emb_dim,
+                         c_emb_dim=c_emb_dim,
                          num_head=num_head,
                          in_channels=in_channels,out_channels=out_channels)
 
@@ -101,6 +109,7 @@ class MidBlock(nn.Module):
 class UpBlock(nn.Module):
     def __init__(self,
                  t_emb_dim,
+                 c_emb_dim,
                  in_channels, out_channels,
                  num_group=8,num_head=1):
         super().__init__()
@@ -108,6 +117,7 @@ class UpBlock(nn.Module):
         self.up = ConvUp(in_channels=in_channels, out_channels=in_channels//2)
         self.block = CTCA(num_group=num_group,
                           t_emb_dim=t_emb_dim,
+                          c_emb_dim=c_emb_dim,
                           num_head=num_head,
                           in_channels=in_channels,out_channels=out_channels)
         
