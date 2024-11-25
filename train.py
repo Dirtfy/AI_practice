@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 
 from dataloader.SplitedDataLoader import SplitedDataLoader
 
-from model.architecture.unet.Unet import Unet
 from model.architecture.unet.ConditionalUnet import ConditionalUnet
+from model.method.diffusion.ConditionalDDPM import ConditionalDDPM
+from model.architecture.unet.Unet import Unet
 from model.method.diffusion.DDPM import DDPM
 from model.method.diffusion.base.BetaScheduler import cosine_beta_schedule
 from model.DiffusionModel import DiffusionModel
@@ -25,9 +26,9 @@ from utils.convert import tensorToPIL
 
 
 # config
-result_path = path.join(".", "result")
-train_path = path.join(result_path, "train", "1")
-test_path = path.join(result_path, "test", "1")
+result_path = path.join(".", "result", "condition")
+train_path = path.join(result_path, "train")
+test_path = path.join(result_path, "test")
 
 graph_path = path.join(train_path, "loss_line_plot.png")
 sample_saved_path = path.join(test_path, "test.png")
@@ -40,7 +41,7 @@ os.makedirs(train_path)
 os.makedirs(test_path)
 
 logger = FileLogger(
-    file_path=train_path,
+    file_path=result_path,
     file_name="log.txt")
 logger.on()
 
@@ -56,8 +57,7 @@ print(f"Using {device} device")
 # dataset setting
 image_transform = transforms.Compose([
         transforms.Resize(image_shape[1:]),
-        transforms.ToTensor(), 
-        transforms.Normalize(0.5, 0.5)
+        transforms.ToTensor()
     ])
 
 training_data = datasets.MNIST(
@@ -97,16 +97,28 @@ unet = ConditionalUnet(
     t_max_position=diffusion_step,
     num_class=10,
     c_emb_dim=c_emb_dim).to(device)
-ddpm = DDPM(
+# unet = Unet(
+#     input_shape=image_shape, 
+#     depth=5,
+#     t_emb_dim=t_emb_dim,
+#     t_max_position=diffusion_step).to(device)
+ddpm = ConditionalDDPM(
     device=device,
     image_shape=image_shape,
     beta_schedule=cosine_beta_schedule(diffusion_step)
 )
+# ddpm = DDPM(
+#     device=device,
+#     image_shape=image_shape,
+#     beta_schedule=cosine_beta_schedule(diffusion_step)
+# )
 model = DiffusionModel(
     architecture=unet,
     method=ddpm,
     optimizer=optim.Adam(unet.parameters(), lr=1e-4)
 )
+params = sum(p.numel() for p in model.architecture.parameters())
+print(f"Model parameters memory usage: {params * 4 / 1024 ** 2} MB")
 
 model_name = f"trained_nUnet_epoch={epoch}"
 

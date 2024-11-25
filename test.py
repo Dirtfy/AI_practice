@@ -3,7 +3,7 @@ import torch.optim as optim
 
 from model.architecture.unet.Unet import Unet
 
-from model.method.diffusion.DDPM import DDPM
+from model.method.diffusion.ConditionalDDPM import DDPM
 from model.DiffusionModel import DiffusionModel
 
 from utils.convert import tensorToPIL

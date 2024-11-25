@@ -19,7 +19,7 @@ class Base(nn.Module):
         self.out_block = out_block
 
     def forward(self, x: torch.Tensor, t_emb=None, c_emb=None) -> torch.Tensor:
-
+        
         skip_list = []
         for down_block in self.down_block_list:
             x, h = self.down_condition_check(down_block, x, t_emb, c_emb)
@@ -32,7 +32,7 @@ class Base(nn.Module):
             x = self.up_condition_check(up_block, skip, x, t_emb, c_emb)
 
         x = self.out_block(x)
-
+        
         return x
     
     def down_condition_check(self, call, x, t_emb, c_emb):
@@ -70,3 +70,4 @@ class Base(nn.Module):
             x = call(skip, x, t_emb, c_emb)
 
         return x
+

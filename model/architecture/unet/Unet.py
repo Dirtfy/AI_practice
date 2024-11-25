@@ -17,7 +17,6 @@ class Unet(Base):
         super().__init__()
 
         channel_schedule = [input_shape[0], *[32*(2**i) for i in range(depth+1)]]
-        print(channel_schedule)
         group_schedule = [1, *[8 for _ in range(depth)]]
 
         self.down_block_list = nn.ModuleList([
@@ -95,7 +94,7 @@ class UpBlock(nn.Module):
                  num_group=8,num_head=1):
         super().__init__()
         
-        self.up = ConvUp(in_channels=in_channels, out_channels=in_channels//2)
+        self.up = ConvTransUp(in_channels=in_channels, out_channels=in_channels//2)
         self.block = CTCA(num_group=num_group,
                           t_emb_dim=t_emb_dim,
                           num_head=num_head,

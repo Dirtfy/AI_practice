@@ -6,7 +6,7 @@ from .Model import Model
 from .method.diffusion.base.Diffusion import Diffusion
 from .Category import Generator
 
-class DiffusionModel(Model, Generator):
+class MockDiffusionModel(Model, Generator):
 
     def __init__(self,
                  architecture: nn.Module,
@@ -85,12 +85,10 @@ class DiffusionModel(Model, Generator):
         return total_loss
     
     def generate(self, num_sample, y) -> torch.Tensor:
-        with torch.no_grad():
-            generated = self.method.generate(
-                self.architecture, 
-                num_images=num_sample,
-                y=y)
-        return generated
+        return self.method.generate(
+            self.architecture, 
+            num_images=num_sample,
+            y=y)
     
     def save(self, file_path):
         torch.save(self.architecture.state_dict(), file_path)

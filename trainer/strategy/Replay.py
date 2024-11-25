@@ -17,7 +17,8 @@ class Replay(Strategy):
                  replay_percentage) -> None:
         super().__init__(
             batch_size=batch_size,
-            portion=portion)
+            portion=portion
+        )
 
         self.generator = generator
         self.label_schedule_list = label_schedule_list
@@ -25,26 +26,38 @@ class Replay(Strategy):
 
 
     def make_loader(self, num_task, dataset) -> SplitedDataLoader:
-        num_sample = int(len(dataset)*self.replay_percentage)
-
+        if num_task == 0:
+            return SplitedDataLoader(
+                batch_size=self.batch_size,
+                portion=self.portion,
+                dataset=dataset)
+        
         label_pool = []
         for label_schedule in self.label_schedule_list[:num_task]:
             label_pool.extend(label_schedule)
-
-        num_sample = int(num_sample/len(label_pool))
+    
+        num_sample = int(
+            (len(dataset)*self.replay_percentage)\
+                /len(label_pool)
+            )
+        
+        print(label_pool)
 
         conacted_dataset = CustomDataSet(data=None, labels=None)
         for label in label_pool:
-            generated_batch = self.generator.generate(num_sample, label)
-            data = []
-            for i in range(num_sample):
-                data.append(generated_batch[i])
-            labels = [label]*num_sample
+            for chunck_size in ([100] * (num_sample//100)) + [num_sample%100]:
+                generated_batch = self.generator.generate(chunck_size, label)
+                data = []
+                for i in range(num_sample):
+                    data.append(generated_batch[i])
+                labels = [label]*num_sample
 
-            conacted_dataset = ConcatDataset([
-                conacted_dataset,
-                CustomDataSet(data=data,labels=labels)
-            ])
+                conacted_dataset = ConcatDataset([
+                    conacted_dataset,
+                    CustomDataSet(data=data,labels=labels)
+                ])
+        
+        print(len(conacted_dataset))
 
         return SplitedDataLoader(
             batch_size=self.batch_size,

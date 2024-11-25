@@ -114,7 +114,7 @@ class UpBlock(nn.Module):
                  num_group=8,num_head=1):
         super().__init__()
         
-        self.up = ConvUp(in_channels=in_channels, out_channels=in_channels//2)
+        self.up = ConvTransUp(in_channels=in_channels, out_channels=in_channels//2)
         self.block = CTCA(num_group=num_group,
                           t_emb_dim=t_emb_dim,
                           c_emb_dim=c_emb_dim,

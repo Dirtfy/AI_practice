@@ -6,7 +6,7 @@ from .base.Diffusion import Diffusion
 
 from utils.convert import tensorToPIL
 
-class DDPM(Diffusion):
+class ConditionalDDPM(Diffusion):
     def __init__(self, 
                  device,
                  image_shape,
@@ -16,7 +16,7 @@ class DDPM(Diffusion):
             image_shape=image_shape,
             beta_schedule=beta_schedule
         )
-
+    
     def q_sample(self, x0, t):
         # 노이즈 생성
         noise = torch.randn_like(x0)
@@ -31,17 +31,9 @@ class DDPM(Diffusion):
         for step in reversed(range(self.diffusion_steps)):
             t = torch.full((batch_size, ), step, dtype=torch.long, device=self.device)
 
-            predicted_noise = architecture(current_image, t)
+            predicted_noise = architecture(current_image, t, y)
 
             current_image = self.denoising(current_image, t, predicted_noise)
-
-            if current_image.shape[0] == 1:
-                import os.path as path
-
-                t_path = path.join("result", "temp", f"t_{step}.png")
-
-                image = tensorToPIL(current_image[0])
-                image.save(t_path)
 
         return current_image
 
@@ -50,7 +42,7 @@ class DDPM(Diffusion):
 
         xt, noise = self.q_sample(x0, t)
 
-        predicted_noise = architecture(xt, t)
+        predicted_noise = architecture(xt, t, y)
 
         loss = F.mse_loss(predicted_noise, noise)
 
@@ -63,4 +55,4 @@ class DDPM(Diffusion):
         
         y = torch.tensor([y for _ in range(num_images)]).to(self.device)
         
-        return self.p_sample(architecture, initial_noise, None)
+        return self.p_sample(architecture, initial_noise, y)

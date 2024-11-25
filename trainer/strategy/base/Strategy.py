@@ -9,8 +9,6 @@ class Strategy(metaclass=ABCMeta):
         self.batch_size = batch_size
         self.portion = portion
 
+    @abstractmethod
     def make_loader(self, num_task, dataset) -> SplitedDataLoader:
-        return SplitedDataLoader(
-            batch_size=self.batch_size,
-            portion=self.portion,
-            dataset=dataset)
+        raise NotImplementedError
