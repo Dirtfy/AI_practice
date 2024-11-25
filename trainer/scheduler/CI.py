@@ -20,6 +20,9 @@ class CI(Scheduler):
         assert not (label_schedule_list is None and count_schedule_list is None)
         assert not (label_schedule_list is not None and count_schedule_list is not None)
 
+        assert not (whole_dataset is None and dataset_by_label is None)
+        assert not (whole_dataset is not None and dataset_by_label is not None)
+
         self.dataset = whole_dataset
 
         if dataset_by_label is not None:

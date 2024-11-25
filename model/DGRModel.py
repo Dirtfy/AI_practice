@@ -1,18 +1,24 @@
+import torch
+from torch._tensor import Tensor
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 
-from model.method.dgr.Generator import Generator
-from model.method.dgr.Solver import Solver
+
+from .Category import Generator, Classifier
+
+from model.method.diffusion.base.Diffusion import Diffusion
+from model.method.classifier.Classic import Classic
+
 from model.Model import Model
 
-class DGRModel(Model):
+class DGRModel(Model, Generator, Classifier):
     def __init__(self,
                  generator_archtecture: nn.Module,
-                 generator_method: Generator,
+                 generator_method: Diffusion,
                  generator_optimizer: Optimizer,
 
                  solver_archtecture: nn.Module,
-                 solver_method: Solver,
+                 solver_method: Classic,
                  solver_optimizer: Optimizer,
 
                  replay_ratio=0.3):
@@ -28,15 +34,7 @@ class DGRModel(Model):
 
         self.replay_ratio = replay_ratio
 
-        self.device = next(generator_archtecture.parameters()).device
-
-        self.is_first_task = True
-
-    def train_g(self):
-        pass
-    def train_s(self):
-        pass
-    
+        self.device = next(generator_archtecture.parameters()).device    
 
 
     def train_epoch(self, train_dataloader, total_epoch, now_epoch):
@@ -46,37 +44,25 @@ class DGRModel(Model):
         epoch_loss = 0.0
         batch_loss = 0.0
 
-        label_list = []
-        for _, labels in train_dataloader:
-            label_list.extend(labels.tolist())
-        label_list = list(set(label_list))
-        
-        batch_size = train_dataloader[0][0][0]
-        total_dataset_size = len(train_dataloader)*batch_size
-
-        for _ in range(int(total_dataset_size*self.replay_ratio)):
-            self.generator_method.generate(self.generator_architecture, None)
-        
-        self.train_s()
-
         for i, (xs, ys) in enumerate(train_dataloader):
             xs = xs.to(self.device)  # GPU로 이동
+            ys = ys.to(self.device)
 
-            num_replay = batch_size*self.replay_ratio
-            
-            self.generator_method.generate(self.generator_architecture, ys, num_replay)
-
+            self.generator_optimizer.zero_grad()
+            generator_loss = self.generator_method.train_batch(self.generator_architecture, xs, ys)
+            generator_loss.backward()
             self.solver_optimizer.zero_grad()
+            self.generator_optimizer.step()
             
             # 모델의 학습 단계
-            loss = self.solver_method.train_batch(self.solver_archtecture, xs, ys)
+            self.solver_optimizer.zero_grad()
+            solver_loss = self.solver_method.train_batch(self.solver_archtecture, xs, ys)
+            solver_loss.backward()
+            self.generator_optimizer.step()
             
-            # 손실 역전파
-            loss.backward()
-            self.optimizer.step()
-            
-            batch_loss += loss.item()
-            epoch_loss += loss.item()
+            loss_sum = generator_loss.item() + solver_loss.item()
+            batch_loss += loss_sum
+            epoch_loss += loss_sum
 
             if (i + 1) % 100 == 0:  # 100 배치마다 손실 출력
                 print(f"Epoch [{now_epoch+1}/{total_epoch}], "+
@@ -84,13 +70,35 @@ class DGRModel(Model):
                       f"Loss: {batch_loss/100:.4f}")
                 batch_loss = 0.0
 
-        self.train_g()
-
         return epoch_loss
     
     def validate_epoch(self, dataloader):
-        return super().validate_epoch(dataloader)
+        self.solver_archtecture.eval()
+
+        total_loss = 0.0
+        for images, labels in dataloader:
+            images = images.to(self.device)
+            labels = labels.to(self.device)
+            
+            # 모델의 예측 단계
+            loss = self.solver_method.train_batch(self.solver_archtecture, images, labels)
+            total_loss += loss.item()
+
+        return total_loss
     
     def test_loop(self, dataloader):
-        return super().test_loop(dataloader)
+        return self.validate_epoch(dataloader)
 
+    def generate(self, num_sample, y) -> Tensor:
+        with torch.no_grad():
+            return self.generator_method.generate(self.generator_architecture, num_sample, y)
+    
+    def inference(self, x) -> Tensor:
+        with torch.no_grad():
+            return self.solver_method.inference(self.solver_archtecture, x)
+        
+    def load(self, file_path):
+        return super().load(file_path)
+    
+    def save(self, file_path):
+        return super().save(file_path)

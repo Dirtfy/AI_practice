@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from Block import *
+from model.architecture.Block import *
 
 class CnnClassifier(nn.Module):
     def __init__(self,
@@ -34,7 +34,7 @@ class CnnClassifier(nn.Module):
         self.feature_extracter = nn.Sequential(*module_list)
 
         self.classifier = nn.Sequential(
-            SF(in_features=(channel_schedule[4])*(input_shape[1]*input_shape[2])/(depth),out_features=4096),
+            SF(in_features=int((channel_schedule[4])*(input_shape[1]*input_shape[2])/(depth)),out_features=4096),
             nn.Dropout1d(),
             SF(in_features=4096,out_features=1000),
             nn.Dropout1d(),

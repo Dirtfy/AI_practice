@@ -6,9 +6,12 @@ class CustomDataSet(Dataset):
         self.labels = labels
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data) if self.data is not None else 0
 
     def __getitem__(self, idx):
-        sample = self.data[idx]
-        label = self.labels[idx]
-        return sample, label
+        if self.data is not None:
+            sample = self.data[idx]
+            label = self.labels[idx]
+            return sample, label
+        else:
+            return None, None

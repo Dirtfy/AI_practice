@@ -3,7 +3,9 @@ import torch.nn as nn
 
 from abc import *
 
-class Diffusion(metaclass=ABCMeta):
+from model.method.Method import Method
+
+class Diffusion(Method):
     
     def __init__(self, 
                  device,
@@ -33,15 +35,6 @@ class Diffusion(metaclass=ABCMeta):
         alpha_bar_t = self.alpha_bars[t].reshape(-1, 1, 1, 1)
         sigma_t = (beta_t).reshape(-1, 1, 1, 1)
 
-        print(xt.shape)
-        print(predicted_noise.shape)
-        print(t.shape)
-        print(alpha_t.shape)
-        print(alpha_bar_t.shape)
-        print(beta_t.shape)
-
-        assert False
-
         return (1/torch.sqrt(alpha_t)) * \
             (xt - \
              ((1-alpha_t) / torch.sqrt(1 - alpha_bar_t)) * predicted_noise) \
@@ -53,10 +46,6 @@ class Diffusion(metaclass=ABCMeta):
 
     @abstractmethod
     def p_sample(self, architecture, xt, y):
-        raise NotImplementedError
-
-    @abstractmethod
-    def train_batch(self, architecture, x0, y):
         raise NotImplementedError
 
     @abstractmethod
